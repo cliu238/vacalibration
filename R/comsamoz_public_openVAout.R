@@ -1,0 +1,74 @@
+#' COMSA-Mozambique: Example Individual-Level Specific (High-Resolution) Cause of Death Data (Publicly Available Version)
+#'
+#' Example individual‑level neonatal cause‑of‑death data using InSilicoVA. This is obtained by applying InSilicoVA algorithm and \code{crossVA} mapping in the \code{openVA} package. This provides specific (high-resolution) cause of death for each individual.
+#'
+#' @format A list of 4 components.
+#' \describe{
+#'   \item{data}{Data frame. Contains the data. Rows are individuals. It has 2 columns. First column "ID" is the individual ID. Second column "cause" are the high-resolution causes of deaths.}
+#'   \item{age_group}{Character. Indicate age group. "neonate" (for 0-27 days) for this data}
+#'   \item{va_algo}{Character. Indicate CCVA algorithm. "insilicova" for this data}
+#'   \item{version}{Character. Date stamp for version control of tracking updates. Only for package maintainers.}
+#' }
+#'
+#' @details
+#' \code{comsamoz_public_openVAout$data$ID[i]} is the ID for individual \code{i}.
+#'
+#' \code{comsamoz_public_openVAout$data$cause[i]} is the specific cause of death for individual \code{i}.
+#'
+#' @references
+#' Macicame, I, et al. (2023). *Countrywide Mortality Surveillance for Action in Mozambique: Results from a National Sample-Based Vital Statistics System for Mortality and Cause of Death*.
+#' American Journal of Tropical Medicine and Hygiene, 108(Suppl 5), pp. 5–16.
+#'
+#' @examples
+#'
+#' \donttest{
+#'
+#' ## using the data (as output by crossVA function in openVA package for InSilicoVA algorithm)
+#' data(comsamoz_public_openVAout)
+#' head(comsamoz_public_openVAout$data)  # head of the data
+#' comsamoz_public_openVAout$data[1,]  # ID and specific cause of death for individual 1
+#'
+#' ## mapped to broad cause
+#' ### same as comsamoz_public_broad$data
+#' comsamoz_public_asbroad = cause_map(df = comsamoz_public_openVAout$data, age_group = "neonate")
+#' head(comsamoz_public_asbroad)
+#'
+#' ### store broad cause map of the data
+#' data(comsamoz_public_broad)
+#' head(comsamoz_public_broad$data) # identical to head(comsamoz_public_asbroad)
+#'
+#' ## mapped to national death counts
+#' comsamoz_public_asdeathcount = colSums(comsamoz_public_asbroad)
+#'
+#' ## VA-calibration for the "neonate" age group and InSilicoVA algorithm
+#' ## input as specific cause
+#' calib_out_asspecific = vacalibration(va_data = setNames(list(comsamoz_public_openVAout$data),
+#'                                                      list(comsamoz_public_openVAout$va_algo)),
+#'                                      age_group = comsamoz_public_openVAout$age_group,
+#'                                      country = "Mozambique")
+#'
+#' ## input as broad cause
+#' calib_out_asbroad = vacalibration(va_data = setNames(list(comsamoz_public_asbroad),
+#'                                                      list(comsamoz_public_openVAout$va_algo)),
+#'                                      age_group = comsamoz_public_openVAout$age_group,
+#'                                      country = "Mozambique")
+#'
+#' ## input as specific cause
+#' calib_out_asdeathcount = vacalibration(va_data = setNames(list(comsamoz_public_asdeathcount),
+#'                                                           list(comsamoz_public_openVAout$va_algo)),
+#'                                        age_group = comsamoz_public_openVAout$age_group,
+#'                                        country = "Mozambique")
+#'
+#' ## comparing uncalibrated CSMF estimates and posterior summary of calibrated CSMF estimates
+#' calib_out_asspecific$p_uncalib
+#' calib_out_asspecific$pcalib_postsumm[1,,]
+#'
+#' calib_out_asbroad$p_uncalib
+#' calib_out_asbroad$pcalib_postsumm[1,,]
+#'
+#' calib_out_asdeathcount$p_uncalib
+#' calib_out_asdeathcount$pcalib_postsumm[1,,]
+#'
+#' }
+#'
+"comsamoz_public_openVAout"

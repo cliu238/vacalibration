@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Vignette for ‘vacalibration’</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Vignette for ‘vacalibration’</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#contents-of-the-package" id="toc-contents-of-the-package">Contents of the Package</a></li>
+<li><a href="#install-and-load" id="toc-install-and-load">Install and
+Load</a></li>
+<li><a href="#stored-data" id="toc-stored-data">Stored Data</a>
+<ul>
+<li><a href="#comsa-mozambique" id="toc-comsa-mozambique">COMSA-Mozambique</a>
+<ul>
+<li><a href="#specific-cause-of-death" id="toc-specific-cause-of-death"><em>Specific</em> Cause of
+Death</a></li>
+<li><a href="#broad-cause-of-death" id="toc-broad-cause-of-death"><em>Broad</em> Cause of Death</a></li>
+</ul></li>
+<li><a href="#misclassification-matrix-estimates-based-on-champs" id="toc-misclassification-matrix-estimates-based-on-champs">Misclassification
+Matrix Estimates Based on CHAMPS</a></li>
+</ul></li>
+<li><a href="#implementing-va-calibration" id="toc-implementing-va-calibration">Implementing VA-calibration</a>
+<ul>
+<li><a href="#single-algorithm" id="toc-single-algorithm">Single
+Algorithm</a>
+<ul>
+<li><a href="#input-as-specific-cause" id="toc-input-as-specific-cause">Input as specific cause</a></li>
+<li><a href="#input-as-broad-cause" id="toc-input-as-broad-cause">Input
+as broad cause</a></li>
+<li><a href="#input-as-broad-cause-death-counts" id="toc-input-as-broad-cause-death-counts">Input as broad cause death
+counts</a></li>
+<li><a href="#comparison-of-estimates" id="toc-comparison-of-estimates">Comparison of estimates</a></li>
+</ul></li>
+<li><a href="#fetching-stored-misclassification-estimates-by-default" id="toc-fetching-stored-misclassification-estimates-by-default">Fetching
+stored misclassification estimates by default</a></li>
+<li><a href="#multiple-algorithms" id="toc-multiple-algorithms">Multiple
+Algorithms</a></li>
+</ul></li>
+</ul>
+</div>
+
+<p><a id="top"></a></p>
+<style>
+h1 {
+font-size: 30px;
+margin-top: 50px; 
+}
+h2 {
+font-size: 22px;
+margin-top: 22px; 
+}
+h3 {
+font-size: 18px;
+margin-top: 18px; 
+}
+body {
+max-width: 1000px;
+margin: 0 auto;
+padding: 20px;
+font-size: 110%
+}
+pre {
+position: relative;
+}
+.copy-btn {
+position: absolute;
+top: 6px;
+right: 6px;
+background-color: #f0f0f0;
+border: 1px solid #ccc;
+border-radius: 4px;
+padding: 4px 8px;
+font-size: 12px;
+cursor: pointer;
+opacity: 0.7;
+transition: opacity 0.3s ease;
+}
+.copy-btn:hover {
+opacity: 1;
+}
+#TOC {
+font-size: 16px; 
+}
+#TOC ul li {
+font-size: 14px; 
+}
+#TOC ul li a {
+font-size: 20px; 
+}
+.tocify {
+width: 1000px !important; 
+}
+#vignette {
+margin-left: 10px !important; 
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll("pre").forEach(function(pre) {
+    const button = document.createElement("button");
+    button.className = "copy-btn";
+    button.textContent = "Copy";
+    pre.style.position = "relative";
+    pre.appendChild(button);
+
+    button.addEventListener("click", function() {
+      const code = pre.querySelector("code");
+      if (!code) return;
+      navigator.clipboard.writeText(code.innerText).then(() => {
+        button.textContent = "Copied!";
+        setTimeout(() => {
+          button.textContent = "Copy";
+        }, 1500);
+      });
+    });
+  });
+});
+</script>
+<div id="contents-of-the-package" class="section level1">
+<h1>Contents of the Package</h1>
+<ul>
+<li><p><strong><u>Data</u></strong>:</p>
+<ul>
+<li><p><code>Mmat_champs</code>: Uncertainty-quantified
+<strong>misclassification matrix estimates</strong> of computer-coded
+verbal autopsy (CCVA) algorithms based on the <a href="https://champshealth.org/">CHAMPS</a> data (Will be updated
+periodically)</p></li>
+<li><p><u>Example Data</u>: Individual-level cause of death data in <a href="https://comsamozambique.org/">COMSA-Mozambique</a> (<a href="https://comsamozambique.org/data-access">Public Version</a>)</p>
+<ul>
+<li><p><code>comsamoz_public_openVAout</code>: <em>Specific</em>
+(High-resolution) causes</p></li>
+<li><p><code>comsamoz_public_broad</code>: <em>Broad</em>
+(Low-resolution) causes</p></li>
+</ul></li>
+</ul></li>
+<li><p><strong><u>Functions</u></strong>:</p>
+<ul>
+<li><p><code>vacalibration()</code>: <strong>Main function</strong> for
+VA-Calibration</p>
+<ul>
+<li><strong><u>Also applicable to</u></strong> to calibrating
+predictions from any discrete classifier (or ensemble of
+classifiers)</li>
+</ul></li>
+<li><p>Other functions:</p>
+<ul>
+<li><p><code>cause_map()</code>: Maps specific causes to broad
+causes</p></li>
+<li><p><code>modular.vacalib()</code>: Implements the modular
+VA-calibration (see Section 3.8 in <a href="https://projecteuclid.org/journals/annals-of-applied-statistics/volume-19/issue-2/Modeling-structure-and-country-specific-heterogeneity-in-misclassification-matrices-of/10.1214/24-AOAS2006.short">Pramanik
+et al. (2025)</a>)</p></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+<div id="install-and-load" class="section level1">
+<h1>Install and Load</h1>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;vacalibration&quot;</span>) <span class="co"># install</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(vacalibration) <span class="co"># load</span></span></code></pre></div>
+</div>
+<div id="stored-data" class="section level1">
+<h1>Stored Data</h1>
+<div id="comsa-mozambique" class="section level2">
+<h2>COMSA-Mozambique</h2>
+<p>For the purpose of illustration,
+<code>comsamoz_public_openVAout</code> and
+<code>comsamoz_public_broad</code> contain publicly available
+(deidentified) individual-level cause of death (COD) data for neonates
+aged 0–27 days from the Countrywide Mortality Surveillance for Action
+project in Mozambique (COMSA-Mozambique). The cause in this example data
+are obtained using the InSilicoVA algorithm.</p>
+<div id="specific-cause-of-death" class="section level3">
+<h3><em>Specific</em> Cause of Death</h3>
+<p>These are assigned <em>specific</em> (high-resolution) COD assigned
+by InSilicoVA algorithm to 2016 WHO Verbal Autopsy Questionnaire data
+for neonate in COMSA-Mozambique. This is obtained using the
+<code>crossVA()</code> function in the <code>openVA</code> package.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">data</span>(comsamoz_public_openVAout)  <span class="co"># load data in R environment</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="fu">class</span>(comsamoz_public_openVAout)  <span class="co"># list</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">names</span>(comsamoz_public_openVAout)  <span class="co"># different components</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>comsamoz_public_openVAout<span class="sc">$</span>age_group  <span class="co"># age group</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>comsamoz_public_openVAout<span class="sc">$</span>va_algo  <span class="co"># algorithm</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="fu">head</span>(comsamoz_public_openVAout<span class="sc">$</span>data)  <span class="co"># head of the specific COD data</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co"># for these 6 individuals, the causes of deaths are &quot;Other and unspecified neonatal CoD&quot;,</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="co"># &quot;Birth asphyxia&quot;, &quot;Neonatal sepsis&quot;, &quot;Birth asphyxia&quot;, &quot;Birth asphyxia&quot;, &quot;Neonatal sepsis&quot;</span></span></code></pre></div>
+<p><a href="#top">Back to top</a></p>
+</div>
+<div id="broad-cause-of-death" class="section level3">
+<h3><em>Broad</em> Cause of Death</h3>
+<p>These are assigned <em>broad</em> (low-resolution) COD for the same
+deaths in the above specific COD data
+<code>comsamoz_public_openVAout</code>. This is obtained using the
+<code>cause_map()</code> function in this package.
+<code>comsamoz_public_openVAout</code> and
+<code>comsamoz_public_broad</code> are of the same format (a list with
+components <code>&quot;data&quot;</code>, <code>&quot;age_group&quot;</code>,
+<code>&quot;va_algo&quot;</code>, and <code>&quot;version&quot;</code>).</p>
+<p>Broad causes are as below for each age group:</p>
+<ul>
+<li><code>neonate</code>:
+<ul>
+<li><code>&quot;congenital_malformation&quot;</code></li>
+<li><code>&quot;pneumonia&quot;</code></li>
+<li><code>&quot;sepsis_meningitis_inf&quot;</code>
+(sepsis/meningitis/infections)</li>
+<li><code>&quot;ipre&quot;</code> (intrapartum-related events)</li>
+<li><code>&quot;other&quot;</code></li>
+<li><code>&quot;prematurity&quot;</code>.</li>
+</ul></li>
+<li><code>child</code>:
+<ul>
+<li><code>&quot;malaria&quot;</code></li>
+<li><code>&quot;pneumonia&quot;</code></li>
+<li><code>&quot;diarrhea&quot;</code>,</li>
+<li><code>&quot;severe_malnutrition&quot;</code>,</li>
+<li><code>&quot;hiv&quot;</code>,</li>
+<li><code>&quot;injury&quot;</code>,</li>
+<li><code>&quot;other&quot;</code>,</li>
+<li><code>&quot;other_infections&quot;</code>, and</li>
+<li><code>&quot;nn_causes&quot;</code> (neonatal causes; consists of IPRE,
+congenital malformation, and prematurity).</li>
+</ul></li>
+</ul>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">data</span>(comsamoz_public_broad)  <span class="co"># load data in R environment</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">head</span>(comsamoz_public_broad<span class="sc">$</span>data)  <span class="co"># head of the stored broad COD data</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="co"># for these 6 individuals, the causes of deaths are &quot;other&quot;, &quot;ipre&quot;, &quot;sepsis_meningitis_inf&quot;,</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co"># &quot;ipre&quot;, &quot;ipre&quot;, &quot;sepsis_meningitis_inf&quot;</span></span></code></pre></div>
+<p><a href="#top">Back to top</a></p>
+</div>
+</div>
+<div id="misclassification-matrix-estimates-based-on-champs" class="section level2">
+<h2>Misclassification Matrix Estimates Based on CHAMPS</h2>
+<p>This stores estimates of misclassification matrices for different
+computer-coded verbal autopsy (CCVA) algorithms, age groups, and
+countries based on the COD data from the CHAMPS project.</p>
+<p><u><strong>CHAMPS Data:</strong></u> The Child Health and Mortality
+Prevention Surveillance (<a href="https://champshealth.org/">CHAMPS</a>)
+Network gathers premortem clinical and laboratory data, along with
+postmortem verbal autopsy (VA) and minimally invasive tissue sampling
+(MITS), from sites in Bangladesh, Ethiopia, Kenya, Mali, Mozambique,
+Sierra Leone, and South Africa. A panel of physicians and scientists
+uses the diagnostic test results and clinical records to ascertain a
+causal chain. This creates a limited paired COD data from two diagnoses:
+a <em>gold standard</em> (CHAMPS cause from here on) and one based on
+VA.</p>
+<p><u><strong>Estimates:</strong></u> We model this data using the
+efficient country-specific misclassification matrix modeling framework
+proposed in <a href="https://projecteuclid.org/journals/annals-of-applied-statistics/volume-19/issue-2/Modeling-structure-and-country-specific-heterogeneity-in-misclassification-matrices-of/10.1214/24-AOAS2006.short">Pramanik
+et al. (2025)</a>. <code>Mmat_champs</code> stores estimates from this
+modeling for</p>
+<ul>
+<li><p><u>two age groups:</u> <code>&quot;neonate&quot;</code> for 0-27 days,
+<code>&quot;child&quot;</code> for 1-59 months.</p></li>
+<li><p><u>three CCVA algorithms:</u> <code>&quot;eava&quot;</code> for EAVA,
+<code>&quot;insilicova&quot;</code> for InSilicoVA, and <code>&quot;interva&quot;</code> for
+InterVA.</p></li>
+<li><p><u>eight countries:</u> <code>&quot;Bangladesh&quot;</code>,
+<code>&quot;Ethiopia&quot;</code>, <code>&quot;Kenya&quot;</code>, <code>&quot;Mali&quot;</code>,
+<code>&quot;Mozambique&quot;</code>, <code>&quot;Sierra Leone&quot;</code>, and
+<code>&quot;South Africa&quot;</code>. It also has an estimate for
+<code>&quot;other&quot;</code> for all countries outside CHAMPS.</p></li>
+</ul>
+<p><code>Mmat_champs</code> is a nested list. For example,
+<code>Mmat_champs$neonate$eava$postsumm$Mozambique</code> contains
+posterior summaries of misclassification estimates for neonates based on
+EAVA algorithm in Mozambique. Similarly,
+<code>Mmat_champs$neonate$eava$postmean$Mozambique</code> and
+<code>Mmat_champs$neonate$eava$asDirich$Mozambique</code> contain
+posterior mean and Diichlet approximation of the posterior.</p>
+<p>For any age group, algorithm, and country, the posterior estimates
+are stored in three formats:</p>
+<ul>
+<li><p><code>&quot;postsumm&quot;</code>: Array of <code>posterior summary</code>
+X <code>CHAMPS broad cause</code> X <code>VA broad cause</code>.</p>
+<ul>
+<li><p>Posterior summaries are <code>mean</code> (posterior mean),
+<code>min</code> (minimum), <code>2.5%</code> (2.5% percentile),
+<code>25%</code> (25% percentile), <code>50%</code> (50% percentile),
+<code>75%</code> (75% percentile), <code>97.5%</code> (97.5%
+percentile), and <code>max</code> (maximum).</p></li>
+<li><p>For example,
+<code>Mmat_champs$neonate$eava$postsumm$Mozambique[,&quot;pneumonia&quot;,]</code>
+are posterior summaries for CHAMPS cause <code>&quot;pneumonia&quot;</code>. Rows
+are posterior summaries. Columns are VA predicted broad causes.</p></li>
+</ul></li>
+<li><p><code>&quot;postmean&quot;</code>: Matrix of
+<code>CHAMPS broad cause</code> X <code>VA broad cause</code>. Contains
+posterior mean of misclassification matrices.</p>
+<ul>
+<li>For example,
+<code>Mmat_champs$neonate$eava$postmean$Mozambique[&quot;pneumonia&quot;,]</code>
+are posterior means for CHAMPS cause <code>&quot;pneumonia&quot;</code>.</li>
+</ul></li>
+<li><p><code>&quot;asDirich&quot;</code>: Matrix of
+<code>CHAMPS broad cause</code> X <code>VA broad cause</code>. Stores
+concentration (or scale) parameters of Dirichlet distribution that best
+approximates the posterior distibution of misclassification matrices
+based on the CHAMPS data.</p>
+<ul>
+<li>For example, Dirichlet distribution with parameters
+<code>Mmat_champs$neonate$eava$asDirich$Mozambique[&quot;pneumonia&quot;,]</code>
+best approximate the misclassification posterior for CHAMPS cause
+<code>&quot;pneumonia&quot;</code>.</li>
+</ul></li>
+</ul>
+<p><a href="#top">Back to top</a></p>
+</div>
+</div>
+<div id="implementing-va-calibration" class="section level1">
+<h1>Implementing VA-calibration</h1>
+<p><code>vacalibration()</code> is the main function for implementing
+VA-calibration, where VA-only data can be input either as specific cause
+(e.g., <code>comsamoz_public_openVAout</code>), or broad cause (e.g.,
+<code>comsamoz_public_broad</code>), or broad-cause-specific death
+counts.</p>
+<div id="single-algorithm" class="section level2">
+<h2>Single Algorithm</h2>
+<div id="input-as-specific-cause" class="section level3">
+<h3>Input as specific cause</h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>calib_out_specific <span class="ot">=</span> <span class="fu">vacalibration</span>(<span class="at">va_data =</span> <span class="fu">setNames</span>(<span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>data),</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>                                                      <span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>va_algo)),</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>                                   <span class="at">age_group =</span> comsamoz_public_openVAout<span class="sc">$</span>age_group,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>                                   <span class="at">country =</span> <span class="st">&quot;Mozambique&quot;</span>)</span></code></pre></div>
+<p>Below is how we can compare uncalibrated CSMF estimates and posterior
+summary of calibrated CSMF estimates:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific<span class="sc">$</span>p_uncalib, <span class="dv">3</span>) <span class="co"># uncalibrated (rounded upto 3 significant digits)</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>) <span class="co"># calibrated (rounded upto 3 significant digits)</span></span></code></pre></div>
+<p><a href="#top">Back to top</a></p>
+</div>
+<div id="input-as-broad-cause" class="section level3">
+<h3>Input as broad cause</h3>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>calib_out_broad <span class="ot">=</span> <span class="fu">vacalibration</span>(<span class="at">va_data =</span> <span class="fu">setNames</span>(<span class="fu">list</span>(comsamoz_public_broad<span class="sc">$</span>data),</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>                                                   <span class="fu">list</span>(comsamoz_public_broad<span class="sc">$</span>va_algo)),</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>                                <span class="at">age_group =</span> comsamoz_public_broad<span class="sc">$</span>age_group,</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>                                <span class="at">country =</span> <span class="st">&quot;Mozambique&quot;</span>)</span></code></pre></div>
+</div>
+<div id="input-as-broad-cause-death-counts" class="section level3">
+<h3>Input as broad cause death counts</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>calib_out_deathcount <span class="ot">=</span> <span class="fu">vacalibration</span>(<span class="at">va_data =</span> <span class="fu">setNames</span>(<span class="fu">list</span>(<span class="fu">colSums</span>(comsamoz_public_broad<span class="sc">$</span>data)),</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>                                                        <span class="fu">list</span>(comsamoz_public_broad<span class="sc">$</span>va_algo)),</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>                                     <span class="at">age_group =</span> comsamoz_public_broad<span class="sc">$</span>age_group,</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>                                     <span class="at">country =</span> <span class="st">&quot;Mozambique&quot;</span>)</span></code></pre></div>
+</div>
+<div id="comparison-of-estimates" class="section level3">
+<h3>Comparison of estimates</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="do">#################################### uncalibrated ####################################</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific<span class="sc">$</span>p_uncalib, <span class="dv">3</span>)  <span class="co"># specific cause</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="fu">round</span>(calib_out_broad<span class="sc">$</span>p_uncalib, <span class="dv">3</span>)  <span class="co"># broad cause</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="fu">round</span>(calib_out_deathcount<span class="sc">$</span>p_uncalib, <span class="dv">3</span>)  <span class="co"># broad-cause-specific death count</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="do">#################################### calibrated ####################################</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>)  <span class="co"># specific cause</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="fu">round</span>(calib_out_broad<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>)  <span class="co"># broad cause</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="fu">round</span>(calib_out_deathcount<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>)  <span class="co"># broad-cause-specific death count</span></span></code></pre></div>
+<p><a href="#top">Back to top</a></p>
+</div>
+</div>
+<div id="fetching-stored-misclassification-estimates-by-default" class="section level2">
+<h2>Fetching stored misclassification estimates by default</h2>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># default</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>calib_out_specific <span class="ot">=</span> <span class="fu">vacalibration</span>(<span class="at">va_data =</span> <span class="fu">setNames</span>(<span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>data),</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>                                                      <span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>va_algo)),</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>                                   <span class="at">age_group =</span> comsamoz_public_openVAout<span class="sc">$</span>age_group,</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>                                   <span class="at">country =</span> <span class="st">&quot;Mozambique&quot;</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co"># misclassification estimates provided by user</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>calib_out_specific_mmat <span class="ot">=</span> <span class="fu">vacalibration</span>(<span class="at">va_data =</span> <span class="fu">setNames</span>(<span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>data),</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a>                                                           <span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>va_algo)),</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a>                                        <span class="at">Mmat.asDirich =</span> <span class="fu">setNames</span>(<span class="fu">list</span>(Mmat_champs[[comsamoz_public_openVAout<span class="sc">$</span>age_group]][[comsamoz_public_openVAout<span class="sc">$</span>va_algo]]<span class="sc">$</span>asDirich[[<span class="st">&quot;Mozambique&quot;</span>]]),</span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a>                                                           <span class="fu">list</span>(comsamoz_public_openVAout<span class="sc">$</span>va_algo)),</span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>                                   <span class="at">age_group =</span> comsamoz_public_openVAout<span class="sc">$</span>age_group,</span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a>                                   <span class="at">country =</span> <span class="st">&quot;Mozambique&quot;</span>)</span></code></pre></div>
+<p>Below is a comparison of uncalibrated and calibrated CSMF
+estimates</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="do">#################################### uncalibrated ####################################</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific<span class="sc">$</span>p_uncalib, <span class="dv">3</span>)  <span class="co"># default</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific_mmat<span class="sc">$</span>p_uncalib, <span class="dv">3</span>)  <span class="co"># user provided misclassification estimate</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="do">#################################### calibrated ####################################</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>)  <span class="co"># default</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="fu">round</span>(calib_out_specific_mmat<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>)  <span class="co"># user provided misclassification estimate</span></span></code></pre></div>
+<p><a href="#top">Back to top</a></p>
+</div>
+<div id="multiple-algorithms" class="section level2">
+<h2>Multiple Algorithms</h2>
+<p>For example, let below are broad-cause-specific death counts based on
+EAVA and InSilicoVA among neonate in Mozambique:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>va_data_example <span class="ot">=</span> <span class="fu">list</span>(<span class="st">&quot;eava&quot;</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="st">&quot;congenital_malformation&quot;</span> <span class="ot">=</span> <span class="dv">40</span>, <span class="st">&quot;pneumonia&quot;</span> <span class="ot">=</span> <span class="dv">175</span>,</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>                                  <span class="st">&quot;sepsis_meningitis_inf&quot;</span> <span class="ot">=</span> <span class="dv">265</span>, <span class="st">&quot;ipre&quot;</span> <span class="ot">=</span> <span class="dv">220</span>,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>                                  <span class="st">&quot;other&quot;</span> <span class="ot">=</span> <span class="dv">30</span>, <span class="st">&quot;prematurity&quot;</span> <span class="ot">=</span> <span class="dv">170</span>),</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>                       <span class="st">&quot;insilicova&quot;</span> <span class="ot">=</span> <span class="fu">c</span>(<span class="st">&quot;congenital_malformation&quot;</span> <span class="ot">=</span> <span class="dv">5</span>, <span class="st">&quot;pneumonia&quot;</span> <span class="ot">=</span> <span class="dv">145</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>                                        <span class="st">&quot;sepsis_meningitis_inf&quot;</span> <span class="ot">=</span> <span class="dv">370</span>, <span class="st">&quot;ipre&quot;</span> <span class="ot">=</span> <span class="dv">330</span>,</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>                                        <span class="st">&quot;other&quot;</span> <span class="ot">=</span> <span class="dv">60</span>, <span class="st">&quot;prematurity&quot;</span> <span class="ot">=</span> <span class="dv">290</span>))</span></code></pre></div>
+<p>The data can be similarly input as above. When multiple algorithms
+are provided, <code>vacalibration()</code> by default performs
+algorithm-specific calibration and an ensemble calibration that combines
+all algorithms to provide a calibrated CSMF estimate for the
+population.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>calib_out_ensemble <span class="ot">=</span> <span class="fu">vacalibration</span>(<span class="at">va_data =</span> va_data_example,</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>                                   <span class="at">age_group =</span> <span class="st">&quot;neonate&quot;</span>, <span class="at">country =</span> <span class="st">&quot;Mozambique&quot;</span>)</span></code></pre></div>
+<p>Here is a comparison of uncalibrated, and algorithm-specific and
+ensemble calibration:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">round</span>(calib_out_ensemble<span class="sc">$</span>p_uncalib, <span class="dv">3</span>) <span class="co"># uncalibrated</span></span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="fu">round</span>(calib_out_ensemble<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;eava&quot;</span>,,], <span class="dv">3</span>) <span class="co"># EAVA-specific calibration</span></span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="fu">round</span>(calib_out_ensemble<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;insilicova&quot;</span>,,], <span class="dv">3</span>) <span class="co"># InSilicoVA-specific calibration</span></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="fu">round</span>(calib_out_ensemble<span class="sc">$</span>pcalib_postsumm[<span class="st">&quot;ensemble&quot;</span>,,], <span class="dv">3</span>) <span class="co"># Ensemble calibration</span></span></code></pre></div>
+<p>Set <code>ensemble = F</code> to turn off ensemble calibration in
+<code>vacalibration()</code>.</p>
+<p><a href="#top">Back to top</a></p>
+</div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
