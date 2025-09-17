@@ -19,7 +19,7 @@ COPY . /app
 WORKDIR /app
 
 # Install core dependencies first
-RUN R -e "install.packages(c('Rcpp', 'ggplot2', 'plyr', 'stringr'), repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages(c('Rcpp', 'ggplot2', 'plyr', 'stringr', 'jsonlite'), repos='https://cloud.r-project.org/')"
 
 # Install remaining dependencies
 RUN R -e "install.packages(c('rstan', 'patchwork', 'reshape2', 'LaplacesDemon'), repos='https://cloud.r-project.org/')"

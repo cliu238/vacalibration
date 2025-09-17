@@ -29,8 +29,48 @@ run_calibration <- function(input_file, output_file) {
     for (algo_name in names(input_data$va_data)) {
       algo_data <- input_data$va_data[[algo_name]]
 
-      # Handle different input formats
-      if (is.matrix(algo_data) || is.data.frame(algo_data)) {
+      # Check if data is empty or user wants to use example data
+      use_example <- FALSE
+      if (is.null(algo_data) ||
+          (is.list(algo_data) && length(algo_data) == 0) ||
+          (is.character(algo_data) && algo_data == "use_example")) {
+        use_example <- TRUE
+      }
+
+      if (use_example) {
+        # Use appropriate example data based on age group and algorithm
+        if (input_data$age_group == "neonate") {
+          # Load neonate example data
+          if (algo_name == "insilicova") {
+            # Use comsamoz_public_broad for broad cause example
+            data(comsamoz_public_broad, envir = environment())
+            va_data[[algo_name]] <- comsamoz_public_broad$data
+            message(paste("Using example data (comsamoz_public_broad) for", algo_name))
+          } else {
+            # For other algorithms, use a subset of the same data
+            data(comsamoz_public_broad, envir = environment())
+            va_data[[algo_name]] <- comsamoz_public_broad$data
+            message(paste("Using example neonate data for", algo_name))
+          }
+        } else if (input_data$age_group == "child") {
+          # For child age group, create synthetic example data
+          # Since we don't have child example data in the package
+          n_deaths <- 100
+          death_matrix <- matrix(0, nrow = n_deaths, ncol = length(child_causes))
+          colnames(death_matrix) <- child_causes
+
+          # Create random distribution of causes
+          set.seed(123)  # For reproducibility
+          for (i in 1:n_deaths) {
+            cause_idx <- sample(1:length(child_causes), 1,
+                              prob = c(0.15, 0.20, 0.15, 0.05, 0.05, 0.05, 0.10, 0.15, 0.10))
+            death_matrix[i, cause_idx] <- 1
+          }
+          rownames(death_matrix) <- paste0("child_", 1:n_deaths)
+          va_data[[algo_name]] <- death_matrix
+          message(paste("Using synthetic example child data for", algo_name))
+        }
+      } else if (is.matrix(algo_data) || is.data.frame(algo_data)) {
         # Already in matrix/dataframe format
         if (is.data.frame(algo_data)) {
           algo_data <- as.matrix(algo_data)
@@ -42,37 +82,56 @@ run_calibration <- function(input_file, output_file) {
         va_data[[algo_name]] <- algo_data
 
       } else if (is.list(algo_data) && length(algo_data) > 0) {
-        # Check if it's a list of objects with 'cause' field
+        # Check if it's a list of objects with 'cause' field (individual-level specific causes)
         if (!is.null(algo_data[[1]]$cause)) {
-          # Convert list of {cause: "name", id: x} to binary matrix
+          # Convert list of {cause: "name", id: x} to data frame for cause_map function
+          # This handles individual-level specific (high-resolution) causes
           n_deaths <- length(algo_data)
-          death_matrix <- matrix(0, nrow = n_deaths, ncol = length(cause_names))
-          colnames(death_matrix) <- cause_names
-          rownames(death_matrix) <- sapply(algo_data, function(x) as.character(x$id))
 
-          for (i in 1:n_deaths) {
-            cause <- algo_data[[i]]$cause
-            # Map cause to column index
-            col_idx <- which(cause_names == cause)
-            if (length(col_idx) > 0) {
-              death_matrix[i, col_idx] <- 1
-            } else {
-              # Try to handle alternative cause names
-              if (cause %in% c("sepsis", "meningitis", "infections")) {
-                col_idx <- which(cause_names == "sepsis_meningitis_inf")
-              } else if (cause == "intrapartum") {
-                col_idx <- which(cause_names == "ipre")
+          # Create data frame in the format expected by cause_map()
+          df_causes <- data.frame(
+            ID = sapply(algo_data, function(x) as.character(x$id)),
+            cause = sapply(algo_data, function(x) as.character(x$cause)),
+            stringsAsFactors = FALSE
+          )
+
+          # Use cause_map() function to convert specific causes to broad causes
+          tryCatch({
+            death_matrix <- cause_map(df = df_causes, age_group = input_data$age_group)
+            # Ensure column names match expected causes
+            if (!all(colnames(death_matrix) %in% cause_names)) {
+              # Reorder/subset columns to match expected causes
+              death_matrix_aligned <- matrix(0, nrow = nrow(death_matrix), ncol = length(cause_names))
+              colnames(death_matrix_aligned) <- cause_names
+              rownames(death_matrix_aligned) <- rownames(death_matrix)
+
+              for (col in colnames(death_matrix)) {
+                if (col %in% cause_names) {
+                  death_matrix_aligned[, col] <- death_matrix[, col]
+                }
               }
+              death_matrix <- death_matrix_aligned
+            }
+          }, error = function(e) {
+            # Fallback to manual mapping if cause_map fails
+            warning(paste("cause_map failed:", e$message, "- using fallback mapping"))
+            death_matrix <- matrix(0, nrow = n_deaths, ncol = length(cause_names))
+            colnames(death_matrix) <- cause_names
+            rownames(death_matrix) <- df_causes$ID
 
+            for (i in 1:n_deaths) {
+              cause <- df_causes$cause[i]
+              # Map specific cause to broad cause
+              broad_cause <- map_specific_to_broad(cause, input_data$age_group)
+              col_idx <- which(cause_names == broad_cause)
               if (length(col_idx) > 0) {
                 death_matrix[i, col_idx] <- 1
               } else {
-                # Default to "other" if cause not recognized
-                col_idx <- which(cause_names == "other")
-                death_matrix[i, col_idx] <- 1
+                # Default to "other"
+                death_matrix[i, which(cause_names == "other")] <- 1
               }
             }
-          }
+          })
           va_data[[algo_name]] <- death_matrix
 
         } else if (is.numeric(unlist(algo_data))) {
@@ -86,21 +145,11 @@ run_calibration <- function(input_file, output_file) {
                       "doesn't match expected causes", length(cause_names)))
           }
         } else {
-          # Try to convert to matrix directly
+          # Try to convert to matrix directly (binary matrix format)
           va_data[[algo_name]] <- as.matrix(algo_data)
           if (ncol(va_data[[algo_name]]) == length(cause_names)) {
             colnames(va_data[[algo_name]]) <- cause_names
           }
-        }
-      } else if (length(algo_data) == 0) {
-        # Empty data - use example data as fallback
-        if (input_data$age_group == "neonate" && algo_name == "insilicova") {
-          # Load example data
-          data(comsamoz_public_broad, envir = environment())
-          va_data[[algo_name]] <- comsamoz_public_broad$data[1:min(100, nrow(comsamoz_public_broad$data)),]
-          warning("Using example data for empty input")
-        } else {
-          stop("Empty data provided and no example data available")
         }
       } else {
         va_data[[algo_name]] <- algo_data
@@ -181,6 +230,54 @@ run_calibration <- function(input_file, output_file) {
     write(toJSON(output, auto_unbox = TRUE), output_file)
     return(1)
   })
+}
+
+# Helper function to map specific causes to broad causes
+map_specific_to_broad <- function(specific_cause, age_group) {
+  # Mapping for neonate causes
+  neonate_mapping <- list(
+    "Birth asphyxia" = "ipre",
+    "Neonatal sepsis" = "sepsis_meningitis_inf",
+    "Neonatal pneumonia" = "pneumonia",
+    "Prematurity" = "prematurity",
+    "Congenital malformation" = "congenital_malformation",
+    "Other and unspecified neonatal CoD" = "other",
+    "Accid fall" = "other",
+    "Road traffic accident" = "other"
+  )
+
+  # Mapping for child causes
+  child_mapping <- list(
+    "Malaria" = "malaria",
+    "Pneumonia" = "pneumonia",
+    "Diarrhea" = "diarrhea",
+    "Severe malnutrition" = "severe_malnutrition",
+    "HIV" = "hiv",
+    "Injury" = "injury",
+    "Other infections" = "other_infections",
+    "Neonatal causes" = "nn_causes"
+  )
+
+  if (age_group == "neonate") {
+    mapping <- neonate_mapping
+  } else {
+    mapping <- child_mapping
+  }
+
+  # Try exact match first
+  if (specific_cause %in% names(mapping)) {
+    return(mapping[[specific_cause]])
+  }
+
+  # Try case-insensitive match
+  for (key in names(mapping)) {
+    if (tolower(key) == tolower(specific_cause)) {
+      return(mapping[[key]])
+    }
+  }
+
+  # Default to "other"
+  return("other")
 }
 
 # Get command line arguments
