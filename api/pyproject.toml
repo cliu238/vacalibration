@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "vacalibration-api"
+version = "0.1.0"
+description = "Web API for VA-Calibration package"
+authors = ["VA-Calibration Team"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+pydantic = "^2.9.0"
+numpy = "^1.26.0"
+pandas = "^2.2.0"
+redis = "^5.0.0"
+celery = "^5.4.0"
+httpx = "^0.27.0"
+python-multipart = "^0.0.12"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+black = "^24.0.0"
+ruff = "^0.7.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

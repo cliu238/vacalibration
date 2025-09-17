@@ -1,0 +1,4 @@
+- IMPORTATN: always use the docker env
+- IMPORTATN: keep it simple, don't over engineering
+- the dockerfile is good, if you need to rebuild it, please let me know.
+- when use python, use 12+ and poetry

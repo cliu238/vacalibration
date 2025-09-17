@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # FastAPI web service
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: vacalib-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api/app:/app/app  # Mount for development hot-reload
+      - ./api/r_scripts:/app/r_scripts  # Mount R scripts
+      - /var/run/docker.sock:/var/run/docker.sock  # Allow API to run Docker commands
+      - /tmp:/tmp  # Share tmp directory with host for job files
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - vacalib-network
+    depends_on:
+      - r-engine
+
+  # R computation engine
+  r-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vacalib-r
+    volumes:
+      - ./data:/data  # Mount data directory
+      - /tmp:/tmp  # Share tmp directory for job files
+    networks:
+      - vacalib-network
+    # Keep container running for API to use
+    command: ["tail", "-f", "/dev/null"]
+
+  # Optional: Redis for job queue (production)
+  redis:
+    image: redis:7-alpine
+    container_name: vacalib-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - vacalib-network
+    volumes:
+      - redis-data:/data
+
+networks:
+  vacalib-network:
+    driver: bridge
+
+volumes:
+  redis-data:
