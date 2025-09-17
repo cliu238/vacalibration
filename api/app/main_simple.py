@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Literal
 from enum import Enum
@@ -9,6 +10,15 @@ app = FastAPI(
     title="VA-Calibration API",
     version="0.1.0",
     description="Web API for calibrating computer-coded verbal autopsy algorithms"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Store jobs in memory for demo

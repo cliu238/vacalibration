@@ -45,16 +45,39 @@ The package takes uncalibrated CSMF estimates and produces calibrated estimates 
 - Prematurity: 8.0% (95% CI: 0.4-18.2%)
 - Pneumonia: 10.5% (95% CI: 0.5-27.9%)
 
-## Web API
+## Web Interface & API
 
-The package now includes a FastAPI-based web service for easy integration:
+### Frontend Dashboard
+A React-based web interface is available for visual interaction with the calibration service:
+- **URL**: http://localhost:8080 (when running locally)
+- **Features**:
+  - Submit calibration jobs through an intuitive UI
+  - Real-time job status monitoring
+  - Interactive visualization of calibration results
+  - Export results as JSON
+- **Tech Stack**: React, TypeScript, Vite, TailwindCSS, shadcn/ui
 
-### API Endpoints
+### API Service
+The package includes a FastAPI-based web service for programmatic integration:
+
+**API Endpoints:**
 - `POST /calibrate` - Submit calibration job
 - `GET /status/{job_id}` - Check job status
 - `GET /result/{job_id}` - Get calibration results
 - `GET /jobs` - List all jobs
 - `DELETE /jobs/{job_id}` - Delete job record
+
+### Running the Full Stack
+```bash
+# Start API server
+cd api
+poetry run uvicorn app.main_simple:app --host 0.0.0.0 --port 8000 --reload
+
+# Start frontend (in a separate terminal)
+cd info-visual-scape
+npm install
+npm run dev
+```
 
 ### Example API Response
 ```json
@@ -80,6 +103,24 @@ The package now includes a FastAPI-based web service for easy integration:
 
 See [api/README.md](api/README.md) for detailed API documentation.
 
+## Project Structure
+
+```
+vacalibration/
+├── api/                    # FastAPI backend service
+│   ├── app/               # Python application code
+│   ├── r_scripts/         # R integration scripts
+│   └── pyproject.toml     # Poetry dependencies
+├── info-visual-scape/      # React frontend dashboard
+│   ├── src/               # TypeScript/React source
+│   ├── package.json       # NPM dependencies
+│   └── vite.config.ts     # Vite configuration
+├── R/                      # Core R package
+├── data/                   # CHAMPS gold-standard data
+├── inst/                   # Stan models
+└── docker-compose.yml      # Container orchestration
+```
+
 ## Package Details
 
 - **Version**: 2.1
@@ -87,4 +128,5 @@ See [api/README.md](api/README.md) for detailed API documentation.
 - **Authors**: Sandipan Pramanik et al.
 - **Supported algorithms**: EAVA, InSilicoVA, InterVA
 - **Age groups**: Neonates (0-27 days), Children (1-59 months)
-- **API**: FastAPI with Python 3.12+ and Poetry
+- **Backend**: FastAPI with Python 3.12+ and Poetry
+- **Frontend**: React 18+ with TypeScript and Vite
