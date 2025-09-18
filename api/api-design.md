@@ -251,7 +251,9 @@ list(
 ### Core API Endpoints
 
 #### 1. POST /calibrate
-**Purpose**: Perform VA calibration on provided data (does NOT run openVA algorithms)
+**Purpose**: Perform VA calibration on provided data by executing R scripts (does NOT run openVA algorithms)
+
+**Execution Mode**: This endpoint executes the vacalibration R package, which can take 5-60 seconds depending on dataset size. Supports both synchronous and asynchronous execution modes.
 
 **Request Body**:
 ```json
@@ -266,6 +268,7 @@ list(
   "country": "string",
   "mmat_type": "string",
   "ensemble": "boolean",
+  "async": "boolean",
   "options": {}
 }
 ```
@@ -282,6 +285,7 @@ list(
 | `country` | string | Yes | Country for calibration matrix selection | `"Mozambique"`, `"Bangladesh"`, `"Ethiopia"`, `"Kenya"`, `"Mali"`, `"Sierra Leone"`, `"South Africa"`, `"other"` | - |
 | `mmat_type` | string | No | Calibration method type | `"prior"` (Dirichlet prior with uncertainty), `"fixed"` (fixed misclassification matrix) | `"prior"` |
 | `ensemble` | boolean | No | Whether to perform ensemble calibration across multiple algorithms | `true`, `false` | `false` |
+| `async` | boolean | No | Execute calibration asynchronously with real-time log streaming | `true`, `false` | `false` |
 | `options` | object | No | Additional calibration options | Object containing optional parameters | `{}` |
 | `options.verbose` | boolean | No | Enable detailed output logging | `true`, `false` | `false` |
 | `options.nMCMC` | integer | No | Number of MCMC iterations | Positive integer (recommended: 5000-10000) | `5000` |
@@ -292,7 +296,7 @@ list(
 - When `data_source="custom"`: Only `va_data` is required, `sample_dataset` should be omitted
 - When `ensemble=true`: `va_data` must contain outputs from multiple algorithms
 
-**Response**:
+**Response (Synchronous Mode - async=false)**:
 ```json
 {
   "status": "success",
@@ -327,6 +331,20 @@ list(
     "algorithms_used": ["insilicova"],
     "calibration_method": "prior"
   }
+}
+```
+
+**Response (Asynchronous Mode - async=true)**:
+```json
+{
+  "status": "accepted",
+  "job_id": "cal_20240115_abc123xyz",
+  "message": "Calibration job started. Connect to WebSocket or poll status endpoint for updates.",
+  "urls": {
+    "status": "/calibrate/cal_20240115_abc123xyz/status",
+    "websocket": "ws://localhost:8000/calibrate/cal_20240115_abc123xyz/logs"
+  },
+  "estimated_duration_seconds": 15
 }
 ```
 
@@ -481,6 +499,80 @@ list(
 }
 ```
 
+#### 8. GET /calibrate/{job_id}/status
+**Purpose**: Check the status of an asynchronous calibration job
+
+**Parameters**:
+- `job_id` (path): The job ID returned from async POST /calibrate request
+
+**Response**:
+```json
+{
+  "job_id": "cal_20240115_abc123xyz",
+  "status": "running|completed|failed",
+  "progress": 45,
+  "progress_message": "Running MCMC iterations...",
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:15Z",
+  "logs": [
+    {"timestamp": "2024-01-15T10:30:01Z", "level": "INFO", "message": "Starting calibration for neonate age group"},
+    {"timestamp": "2024-01-15T10:30:02Z", "level": "INFO", "message": "Loading misclassification matrix for Mozambique"},
+    {"timestamp": "2024-01-15T10:30:05Z", "level": "INFO", "message": "Running MCMC with 5000 iterations"},
+    {"timestamp": "2024-01-15T10:30:15Z", "level": "INFO", "message": "MCMC iteration 2500/5000 (50%)"}
+  ],
+  "result": null  // Will contain the calibration results when status="completed"
+}
+```
+
+#### 9. WebSocket /calibrate/{job_id}/logs
+**Purpose**: Real-time streaming of R script execution logs during calibration
+
+**Connection URL**: `ws://host:port/calibrate/{job_id}/logs`
+
+**Message Format (Server → Client)**:
+```json
+{
+  "type": "log|progress|status|result|error",
+  "timestamp": "2024-01-15T10:30:15.123Z",
+  "data": {
+    // For type="log"
+    "level": "INFO|WARN|ERROR",
+    "message": "MCMC iteration 2500/5000",
+    "source": "R"
+
+    // For type="progress"
+    "percentage": 50,
+    "message": "Processing MCMC iterations"
+
+    // For type="status"
+    "status": "running|completed|failed"
+
+    // For type="result"
+    "results": {/* Full calibration results */}
+
+    // For type="error"
+    "error": "Error message",
+    "details": {/* Error details */}
+  }
+}
+```
+
+**Client → Server Messages**:
+```json
+{
+  "type": "ping|subscribe|unsubscribe",
+  "data": {}
+}
+```
+
+**Connection Lifecycle**:
+1. Client connects to WebSocket endpoint with job_id
+2. Server validates job_id and starts streaming logs
+3. Server sends real-time logs as R script executes
+4. Server sends progress updates periodically
+5. Server sends final results or error when complete
+6. Connection closes automatically after completion
+
 ### Data Format Examples
 
 #### Specific Causes Format
@@ -496,6 +588,40 @@ list(
 #### Death Counts Format
 ```json
 {"congenital_malformation": 5, "pneumonia": 148, "sepsis_meningitis_inf": 363}
+```
+
+### R Script Execution & Log Streaming
+
+**Implementation Details**:
+
+The calibration API executes R scripts from the vacalibration package. During execution:
+
+1. **R Script Invocation**: The API spawns an R subprocess using `Rscript` to run the vacalibration functions
+2. **Log Capture**: All R console output (stdout/stderr) is captured in real-time
+3. **Progress Tracking**: The R script emits progress messages during MCMC iterations
+4. **Real-time Streaming**: Logs are streamed to clients via WebSocket or stored for polling
+
+**Log Types Generated**:
+- **Initialization**: Loading data, setting up calibration parameters
+- **Matrix Loading**: Loading country-specific misclassification matrices
+- **MCMC Progress**: Iteration counts and convergence metrics
+- **Warnings**: Data quality issues or convergence warnings
+- **Results**: Final CSMF calculations and uncertainty intervals
+- **Errors**: R execution errors or data validation failures
+
+**Example R Script Output Stream**:
+```
+[INFO] Starting VA calibration v2.1.0
+[INFO] Age group: neonate, Country: Mozambique
+[INFO] Loading misclassification matrix from CHAMPS data
+[INFO] Input data: 1190 deaths across 6 causes
+[INFO] Starting MCMC with 5000 iterations, 5000 burn-in
+[PROGRESS] MCMC iteration 1000/10000 (10%)
+[PROGRESS] MCMC iteration 2000/10000 (20%)
+[INFO] Checking convergence diagnostics...
+[INFO] Gelman-Rubin statistic: 1.02 (converged)
+[INFO] Calculating posterior summaries...
+[SUCCESS] Calibration completed successfully
 ```
 
 ### Integration with OpenVA
@@ -626,12 +752,35 @@ response = requests.post('http://localhost:8000/calibrate', json=ensemble_reques
 - **Small datasets** (< 1000 deaths): 5-10 seconds
 - **Medium datasets** (1000-5000 deaths): 10-30 seconds
 - **Large datasets** (> 5000 deaths): 30-60 seconds
+- **MCMC iterations**: Processing time scales linearly with nMCMC parameter
+
+#### Synchronous vs Asynchronous Mode:
+
+**Use Synchronous Mode (async=false) when**:
+- Dataset is small (< 1000 deaths)
+- Quick response is needed (< 10 seconds)
+- Simple integration without WebSocket support
+
+**Use Asynchronous Mode (async=true) when**:
+- Dataset is large (> 1000 deaths)
+- Real-time progress feedback is desired
+- Running multiple calibrations concurrently
+- Better user experience with progress indicators
+- Need to prevent HTTP timeouts on long operations
+
+#### Benefits of Real-time Log Streaming:
+1. **User Feedback**: Users see progress instead of waiting blindly
+2. **Debugging**: Real-time visibility into R script execution
+3. **Progress Tracking**: Accurate progress percentages during MCMC
+4. **Early Error Detection**: Immediate notification of failures
+5. **Better UX**: Frontend can show progress bars and status updates
 
 #### Optimization Strategies:
 1. **Caching**: Cache calibration results for sample datasets
 2. **Parallel Processing**: Run multiple algorithm calibrations in parallel
 3. **Batch Processing**: Support batch API for multiple calibration requests
-4. **Async Operations**: Implement job queue for long-running calibrations
+4. **Async Operations**: Job queue with WebSocket streaming for long-running calibrations
+5. **Resource Management**: Limit concurrent R processes to prevent server overload
 
 ### Security & Authentication
 
@@ -653,61 +802,10 @@ response = requests.post('http://localhost:8000/calibrate', json=ensemble_reques
 - Support WHO2012, WHO2016 questionnaire formats
 - Version field in sample datasets for tracking updates
 
-## Implementation Roadmap
+## Implementation & Testing
 
-### Phase 1: Core Functionality
-- [x] Basic calibration endpoint
-- [x] Sample data integration
-- [x] Direct R package execution
-
-### Phase 2: Enhanced Features
-- [ ] Full OpenVA integration
-- [ ] Batch processing
-- [ ] Result caching
-- [ ] Comprehensive validation
-
-### Phase 3: Production Ready
-- [ ] Authentication system
-- [ ] Rate limiting
-- [ ] Monitoring & logging
-- [ ] Docker containerization
-- [ ] Kubernetes deployment
-
-### Phase 4: Advanced Features
-- [ ] Real-time calibration updates
-- [ ] Custom misclassification matrices
-- [ ] Multi-country ensemble calibration
-- [ ] GraphQL API option
-
-## Testing Strategy
-
-### Unit Tests:
-- Data format conversions
-- Cause mapping logic
-- Input validation
-
-### Integration Tests:
-- R package integration
-- Sample data loading
-- End-to-end calibration
-
-### Performance Tests:
-- Load testing with various dataset sizes
-- Concurrent request handling
-- Memory usage monitoring
-
-## Documentation Requirements
-
-### API Documentation:
-- OpenAPI/Swagger specification
-- Interactive API explorer
-- Code examples in Python, R, JavaScript
-
-### User Guides:
-- Getting started tutorial
-- OpenVA integration guide
-- Data preparation guidelines
-- Interpretation of results
+- **Implementation Roadmap**: See [api-todo.md](./api-todo.md) for detailed implementation status and task tracking
+- **Test Design**: See [api-test.md](./api-test.md) for comprehensive testing strategy, test cases, and test infrastructure requirements
 
 ## Conclusion
 
