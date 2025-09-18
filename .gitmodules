@@ -1,3 +1,6 @@
 [submodule "info-visual-scape"]
 	path = info-visual-scape
 	url = https://github.com/cliu238/info-visual-scape.git
+[submodule "openVA"]
+	path = openVA
+	url = https://github.com/verbal-autopsy-software/openVA.git
