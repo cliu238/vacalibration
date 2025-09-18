@@ -18,7 +18,7 @@ License: GPL-2
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Imports: rstan, parallel, ggplot2, patchwork, reshape2, LaplacesDemon,
+Imports: rstan, parallel, reshape2, LaplacesDemon,
         MASS
 Config/testthat/edition: 3
 Config/Needs/compile: yes

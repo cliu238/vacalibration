@@ -2,8 +2,6 @@
 
 export(cause_map)
 export(vacalibration)
-import(ggplot2)
-import(patchwork)
 import(rstan)
 importFrom(LaplacesDemon,ddirichlet)
 importFrom(MASS,ginv)

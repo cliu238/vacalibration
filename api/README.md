@@ -4,157 +4,153 @@ FastAPI-based web service for the VA-Calibration package, providing RESTful endp
 
 ## Features
 
-- 🚀 **Asynchronous Processing**: Non-blocking job submission with status tracking
-- 🐳 **Docker Integration**: Seamless execution of R calibration models
-- 📊 **Multiple Input Formats**: Supports binary matrices, death counts, and cause lists
+- 🚀 **Direct Processing**: Immediate calibration results without job queuing
+- 🔧 **Local R Integration**: Runs R package directly without Docker
+- 📊 **Multiple Input Formats**: Supports specific causes, binary matrices, and example data
 - 🔄 **Ensemble Support**: Calibrate multiple algorithms simultaneously
 - 📈 **Confidence Intervals**: Returns calibrated estimates with uncertainty bounds
+- ⚡ **Lightweight**: Simple API without job storage or external dependencies
 
-## Quick Start
+## Prerequisites
 
-### Using Docker Compose (Recommended)
+### 1. Install R and Dependencies
 
 ```bash
-# Start all services
-docker-compose up -d
+# Install required R packages
+Rscript -e "install.packages(c('rstan', 'LaplacesDemon', 'reshape2', 'MASS', 'jsonlite'), repos='https://cloud.r-project.org/')"
 
-# Check health
-curl http://localhost:8000/
-
-# Submit calibration job
-curl -X POST http://localhost:8000/calibrate \
-  -H "Content-Type: application/json" \
-  -d @example_request.json
+# Install vacalibration package from project root
+cd ..
+R CMD INSTALL . --no-multiarch --with-keep.source
 ```
+
+**Note**: If you encounter issues with ggplot2/patchwork dependencies, they have been removed from the package as they're only needed for plotting.
+
+### 2. Install Python Dependencies
+
+```bash
+# Using Poetry (recommended)
+cd api
+poetry install
+
+# Or using pip
+pip install fastapi uvicorn
+```
+
+## Running the API
 
 ### Local Development
 
 ```bash
-# Install dependencies
+# Using Poetry (recommended)
 cd api
-poetry install
+poetry run python app/main_direct.py
 
-# Run development server
-poetry run uvicorn app.main:app --reload
+# Or directly with Python
+python app/main_direct.py
 ```
 
-## API Documentation
+The API will be available at `http://localhost:8000`
 
-### Endpoints
+### Test the Installation
 
-#### `POST /calibrate`
-Submit a new calibration job.
+```bash
+# Check health status
+curl http://localhost:8000/
+
+# Should return:
+{
+  "status": "healthy",
+  "service": "VA-Calibration API (Direct)",
+  "r_status": "R ready",
+  "data_files": {
+    "comsamoz_broad": true,
+    "comsamoz_openVA": true
+  }
+}
+```
+
+## API Endpoints
+
+### `GET /` - Health Check
+Returns the API status and checks R installation.
+
+### `POST /calibrate` - Run Calibration
+Performs calibration and returns results immediately.
 
 **Request Body:**
 ```json
 {
   "va_data": {
-    "insilicova": [
-      {"cause": "sepsis_meningitis_inf", "id": "death_001"},
-      {"cause": "pneumonia", "id": "death_002"}
-    ]
+    "insilicova": "use_example"  // or actual data
   },
-  "age_group": "neonate",
-  "country": "Mozambique",
-  "mmat_type": "Mmatfixed",
-  "ensemble": false
+  "age_group": "neonate",        // "neonate" or "child"
+  "country": "Mozambique",       // Country name
+  "mmat_type": "prior",          // "prior" or "fixed"
+  "ensemble": true               // true for multiple algorithms
 }
 ```
 
 **Response:**
 ```json
 {
-  "job_id": "uuid",
-  "status": "pending",
-  "message": "Calibration job submitted successfully",
-  "created_at": "2025-09-17T17:08:57.607253"
-}
-```
-
-#### `GET /status/{job_id}`
-Check the status of a calibration job.
-
-**Response:**
-```json
-{
-  "job_id": "uuid",
-  "status": "completed|running|failed",
-  "created_at": "timestamp",
-  "completed_at": "timestamp",
-  "runtime_seconds": 3.16
-}
-```
-
-#### `GET /result/{job_id}`
-Get complete calibration results.
-
-**Response:**
-```json
-{
-  "job_id": "uuid",
-  "status": "completed",
-  "uncalibrated_csmf": {
-    "sepsis_meningitis_inf": 0.39,
-    "pneumonia": 0.10,
-    "prematurity": 0.16,
-    "ipre": 0.30,
-    "other": 0.05
-  },
-  "calibrated_csmf": {
+  "status": "success",
+  "uncalibrated": [0.0008, 0.1244, 0.305, ...],
+  "calibrated": {
     "insilicova": {
       "mean": {
-        "sepsis_meningitis_inf": 0.594,
-        "pneumonia": 0.055,
-        "prematurity": 0.044
+        "congenital_malformation": 0.0008,
+        "pneumonia": 0.1086,
+        "sepsis_meningitis_inf": 0.5602,
+        "ipre": 0.1983,
+        "other": 0.0521,
+        "prematurity": 0.08
       },
       "lower_ci": {...},
       "upper_ci": {...}
     }
   },
-  "runtime_seconds": 3.162
+  "age_group": "neonate",
+  "country": "Mozambique"
 }
 ```
 
-#### `GET /jobs`
-List all jobs with optional status filtering.
-
-**Query Parameters:**
-- `status`: Filter by job status (pending|running|completed|failed)
-- `limit`: Maximum number of results (default: 100)
-
-#### `DELETE /jobs/{job_id}`
-Delete a job record.
+### `GET /example-data` - Get Example Data Info
+Returns information about available example datasets.
 
 ## Data Formats
 
 ### Input Formats
 
-The API accepts three formats for VA data:
+The API accepts several formats for VA data:
 
-1. **Cause List** (List of objects with cause and id):
+1. **Use Example Data** (simplest for testing):
 ```json
-[
-  {"cause": "pneumonia", "id": "001"},
-  {"cause": "sepsis_meningitis_inf", "id": "002"}
-]
+{"va_data": {"insilicova": "use_example"}}
 ```
 
-2. **Binary Matrix** (Rows = deaths, Columns = causes):
+2. **Specific Causes** (list of deaths with causes):
 ```json
-[
-  [0, 0, 1, 0, 0, 0],  // Death 1: sepsis
-  [0, 1, 0, 0, 0, 0]   // Death 2: pneumonia
-]
+{
+  "va_data": {
+    "insilicova": [
+      {"cause": "Birth asphyxia", "id": "death_001"},
+      {"cause": "Neonatal sepsis", "id": "death_002"}
+    ]
+  }
+}
 ```
 
-3. **Death Counts** (Counts per cause):
+3. **Binary Matrix** (rows = deaths, columns = broad causes):
 ```json
-[0, 10, 39, 30, 5, 16]  // Order matches cause categories
-```
-
-4. **Empty Array** (Uses example data):
-```json
-[]  // Will use built-in example data for testing
+{
+  "va_data": {
+    "insilicova": [
+      [0, 0, 1, 0, 0, 0],  // Death 1: sepsis
+      [0, 1, 0, 0, 0, 0]   // Death 2: pneumonia
+    ]
+  }
+}
 ```
 
 ### Cause Categories
@@ -162,7 +158,7 @@ The API accepts three formats for VA data:
 #### Neonates (0-27 days)
 - `congenital_malformation`
 - `pneumonia`
-- `sepsis_meningitis_inf` (sepsis/meningitis/infections)
+- `sepsis_meningitis_inf`
 - `ipre` (intrapartum-related events)
 - `other`
 - `prematurity`
@@ -178,126 +174,110 @@ The API accepts three formats for VA data:
 - `other_infections`
 - `nn_causes` (neonatal causes)
 
-### Parameters
+## Example Usage
 
-- **age_group**: `"neonate"` or `"child"`
-- **country**: One of: `"Bangladesh"`, `"Ethiopia"`, `"Kenya"`, `"Mali"`, `"Mozambique"`, `"Sierra Leone"`, `"South Africa"`, `"other"`
-- **mmat_type**: `"Mmatfixed"` (fixed misclassification matrix) or `"Mmatprior"` (with uncertainty)
-- **ensemble**: `true` to combine multiple algorithms, `false` for single algorithm
-- **verbose**: `true` for detailed logging (optional)
-
-## Architecture
-
-```
-┌─────────────┐     ┌────────────────┐     ┌──────────────┐
-│   Client    │────▶│  FastAPI       │────▶│  R Package   │
-│   (REST)    │◀────│  (Python)      │◀────│  (Docker)    │
-└─────────────┘     └────────────────┘     └──────────────┘
-                            │
-                    ┌───────▼────────┐
-                    │  Redis         │
-                    │  (Optional)    │
-                    └────────────────┘
-```
-
-### Components
-
-- **API Container**: FastAPI application (Python 3.12)
-- **R Container**: VA-calibration R package with Stan models
-- **Redis Container**: Job queue and caching (optional)
-
-## Python Client Example
+### Python Client
 
 ```python
 import requests
-import time
+import json
 
-# Submit job
+# Simple test with example data
 response = requests.post(
     "http://localhost:8000/calibrate",
     json={
-        "va_data": {"insilicova": []},
+        "va_data": {"insilicova": "use_example"},
         "age_group": "neonate",
-        "country": "Mozambique",
-        "mmat_type": "Mmatfixed"
+        "country": "Mozambique"
     }
 )
-job = response.json()
 
-# Poll for results
-while True:
-    status = requests.get(f"http://localhost:8000/status/{job['job_id']}")
-    if status.json()['status'] in ['completed', 'failed']:
-        break
-    time.sleep(2)
-
-# Get results
-results = requests.get(f"http://localhost:8000/result/{job['job_id']}")
-print(results.json())
+result = response.json()
+print(json.dumps(result, indent=2))
 ```
 
-## Performance
+### Command Line
 
-- **Startup time**: 2-3 seconds
-- **Calibration time**: 3-10 seconds for 100-1000 deaths
-- **Memory usage**: ~150MB per worker
-- **Concurrent requests**: 100+ supported
+```bash
+# Test with example data
+curl -X POST http://localhost:8000/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{"va_data": {"insilicova": "use_example"}, "age_group": "neonate", "country": "Mozambique"}' \
+  | python3 -m json.tool
 
-## Development
+# Test with specific causes
+curl -X POST http://localhost:8000/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {
+      "insilicova": [
+        {"cause": "Birth asphyxia", "id": "001"},
+        {"cause": "Neonatal sepsis", "id": "002"},
+        {"cause": "Prematurity", "id": "003"}
+      ]
+    },
+    "age_group": "neonate",
+    "country": "Mozambique"
+  }' | python3 -m json.tool
+```
 
-### Project Structure
+## Available API Implementations
+
+The API directory contains multiple implementations:
+
+- **`main_direct.py`**: Direct execution without job storage (recommended for local use)
+- **`main_simple.py`**: Simplified version with mock data fallback
+- **`main.py`**: Full version with background job processing (for production)
+
+## Project Structure
+
 ```
 api/
 ├── app/
-│   ├── main.py           # FastAPI application
-│   └── main_simple.py     # Simplified mock version
+│   ├── main_direct.py    # Direct execution API (current)
+│   ├── main_simple.py     # Simplified mock version
+│   └── main.py           # Full production version
 ├── r_scripts/
-│   └── run_calibration.R  # R integration script
-├── pyproject.toml         # Poetry dependencies
-├── Dockerfile            # Python container
+│   └── run_calibration.R # R integration script
+├── pyproject.toml        # Poetry dependencies
 └── README.md            # This file
 ```
 
-### Requirements
-- Python 3.12+
-- Poetry 1.8+
-- Docker 20+
-- Docker Compose 2.0+
+## Performance Notes
 
-### Testing
+- **Startup time**: 2-3 seconds
+- **Calibration time**: 10-30 seconds for typical datasets (uses MCMC sampling)
+- **Memory usage**: ~200MB including R runtime
+- **Concurrent requests**: Limited by R's single-threaded nature
+
+## Troubleshooting
+
+### R Package Not Found
 ```bash
-# Run with example data
-curl -X POST http://localhost:8000/calibrate \
-  -H "Content-Type: application/json" \
-  -d '{"va_data": {"insilicova": []}, "age_group": "neonate", "country": "Mozambique"}'
-
-# Check logs
-docker logs vacalib-api --tail 50
+# Reinstall the package
+cd ..
+R CMD INSTALL . --no-multiarch --with-keep.source
 ```
 
-## Error Handling
-
-The API returns appropriate HTTP status codes:
-- `200`: Success
-- `404`: Job not found
-- `500`: Internal server error
-
-Error responses include detailed messages:
-```json
-{
-  "error_message": "Detailed error description",
-  "traceback": "Full stack trace (development mode)"
-}
+### Missing R Dependencies
+```bash
+# Install all required packages
+Rscript -e "install.packages(c('rstan', 'LaplacesDemon', 'reshape2', 'MASS', 'jsonlite'))"
 ```
 
-## Future Enhancements
+### Data Files Not Found
+Ensure you're running from the `api/` directory so the relative paths `../data/*.rda` work correctly.
 
-- [ ] Authentication and API keys
-- [ ] Rate limiting
-- [ ] WebSocket support for real-time updates
-- [ ] Batch processing
-- [ ] Result caching
-- [ ] Pure Python implementation with PyStan
+## Development
+
+### Running with Auto-reload
+```bash
+poetry run uvicorn app.main_direct:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Environment Variables
+- No environment variables required for local development
+- The API automatically detects and uses local R installation
 
 ## License
 
