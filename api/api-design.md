@@ -494,7 +494,8 @@ list(
   },
   "calibration_methods": {
     "prior": "Propagates uncertainty using Dirichlet prior",
-    "fixed": "Uses fixed misclassification matrix"
+    "fixed": "Uses fixed misclassification matrix",
+    "samples": ???????????
   }
 }
 ```
