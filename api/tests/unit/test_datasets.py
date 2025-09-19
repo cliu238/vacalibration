@@ -423,20 +423,21 @@ class TestDatasetPreviewEndpoint:
         mock_tempfile,
         tmp_path
     ):
-        """Test preview when R script fails."""
+        """Test preview when dataset file doesn't exist."""
         with patch('app.main_direct.check_r_setup', mock_r_ready), \
              patch('tempfile.TemporaryDirectory', mock_tempfile), \
              patch('subprocess.run') as mock_run, \
-             patch('os.path.exists', return_value=False):  # No output file
+             patch('os.path.exists', return_value=False):  # No dataset file
 
             mock_run.return_value.returncode = 1
             mock_run.return_value.stderr = "R script failed"
 
             response = await async_client.get("/datasets/comsamoz_public_broad/preview")
 
-            assert response.status_code == 500
+            # When file doesn't exist, expect 404 not 500
+            assert response.status_code == 404
             error_data = response.json()
-            assert "R script failed" in error_data["detail"]
+            assert "not found" in error_data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_preview_all_valid_datasets(

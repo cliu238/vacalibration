@@ -1,28 +1,20 @@
 """
-Shared test fixtures and configuration for VA-Calibration API tests.
+Shared test fixtures for VA-Calibration API tests.
+Simplified version focusing on core functionality.
 """
 
 import pytest
 import pytest_asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock
 from httpx import AsyncClient, ASGITransport
 from typing import Dict, List, Any
-import asyncio
-import json
-from datetime import datetime, timedelta
-
-# Import fakeredis for Redis testing
-import fakeredis.aioredis
-
-# Import the app using absolute import from project root
 import sys
 import os
+
+# Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.main_direct import app
-
-# Note: Mock classes will be defined here instead of importing from test files
-# to avoid circular dependencies
 
 
 @pytest_asyncio.fixture
@@ -58,10 +50,17 @@ def sample_binary_matrix() -> List[List[int]]:
 
 
 @pytest.fixture
-def sample_death_counts() -> List[int]:
+def sample_death_counts() -> Dict[str, int]:
     """Sample death counts by broad cause (neonate)."""
-    # Order: congenital_malformation, pneumonia, sepsis_meningitis_inf, ipre, other, prematurity
-    return [50, 150, 300, 250, 100, 200]
+    # Death counts format as per API design: dictionary with cause names as keys
+    return {
+        "congenital_malformation": 50,
+        "pneumonia": 150,
+        "sepsis_meningitis_inf": 300,
+        "ipre": 250,
+        "other": 100,
+        "prematurity": 200
+    }
 
 
 @pytest.fixture
@@ -284,284 +283,6 @@ def mock_convert_causes_output():
     }
 
 
-# Async infrastructure fixtures
-@pytest_asyncio.fixture
-async def fake_redis_client():
-    """Provide a real fakeredis client for integration testing."""
-    redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    yield redis_client
-    await redis_client.flushall()
-    await redis_client.aclose()
-
-
-@pytest.fixture
-def mock_redis_client():
-    """Provide a mock Redis client for unit testing."""
-    return MockRedisClient()
-
-
-@pytest.fixture
-def mock_celery_app():
-    """Mock Celery application for testing."""
-    mock_app = MagicMock()
-    mock_app.control.inspect.active.return_value = {}
-    mock_app.control.inspect.reserved.return_value = {}
-    return mock_app
-
-
-@pytest.fixture
-def mock_celery_task():
-    """Mock Celery task for testing."""
-    def create_task(task_id: str = "test-task", status: str = "PENDING"):
-        return MockCeleryResult(task_id, status)
-    return create_task
-
-
-@pytest_asyncio.fixture
-async def websocket_client():
-    """Provide a mock WebSocket client for testing."""
-    return MockWebSocket()
-
-
-@pytest.fixture
-def redis_subscriber():
-    """Provide a mock Redis subscriber for testing."""
-    return MockRedisSubscriber()
-
-
-# Async test utilities
-@pytest_asyncio.fixture
-async def async_test_timeout():
-    """Provide a timeout for async tests."""
-    return 10.0  # 10 seconds
-
-
-@pytest.fixture
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-# WebSocket testing fixtures
-@pytest_asyncio.fixture
-async def websocket_test_server():
-    """Mock WebSocket test server."""
-    class MockWebSocketServer:
-        def __init__(self):
-            self.connections = []
-            self.messages = []
-
-        async def connect(self, websocket):
-            self.connections.append(websocket)
-            await websocket.accept()
-
-        async def disconnect(self, websocket):
-            if websocket in self.connections:
-                self.connections.remove(websocket)
-
-        async def broadcast(self, message: str):
-            for ws in self.connections:
-                await ws.send_text(message)
-
-        def get_connection_count(self):
-            return len(self.connections)
-
-    return MockWebSocketServer()
-
-
-# Performance testing fixtures
-@pytest.fixture
-def performance_metrics():
-    """Track performance metrics during tests."""
-    class PerformanceTracker:
-        def __init__(self):
-            self.start_times = {}
-            self.durations = {}
-            self.memory_usage = {}
-
-        def start_timer(self, name: str):
-            self.start_times[name] = datetime.utcnow()
-
-        def end_timer(self, name: str):
-            if name in self.start_times:
-                duration = datetime.utcnow() - self.start_times[name]
-                self.durations[name] = duration.total_seconds()
-
-        def get_duration(self, name: str) -> float:
-            return self.durations.get(name, 0.0)
-
-        def record_memory(self, name: str, usage: int):
-            self.memory_usage[name] = usage
-
-    return PerformanceTracker()
-
-
-# Concurrent testing fixtures
-@pytest_asyncio.fixture
-async def concurrent_client_pool(async_client):
-    """Provide multiple HTTP clients for concurrent testing."""
-    clients = []
-    for i in range(5):
-        async with AsyncClient(app=app, base_url="http://test") as client:
-            clients.append(client)
-
-    yield clients
-
-    # Cleanup is handled by context manager
-
-
-# Security testing fixtures
-@pytest.fixture
-def security_test_inputs():
-    """Provide security test inputs for validation testing."""
-    return {
-        "sql_injection": [
-            "'; DROP TABLE jobs; --",
-            "1; DELETE FROM users WHERE id=1; --",
-            "admin'/**/OR/**/1=1/**/--"
-        ],
-        "xss_payloads": [
-            "<script>alert('XSS')</script>",
-            "javascript:alert('XSS')",
-            "<img src=x onerror=alert('XSS')>"
-        ],
-        "path_traversal": [
-            "../../../etc/passwd",
-            "..\\..\\..\\windows\\system32\\config\\sam",
-            "/etc/shadow"
-        ],
-        "command_injection": [
-            "; rm -rf /",
-            "| cat /etc/passwd",
-            "$(whoami)"
-        ]
-    }
-
-
-# Load testing fixtures
-@pytest.fixture
-def load_test_config():
-    """Configuration for load testing."""
-    return {
-        "max_concurrent_requests": 50,
-        "request_timeout": 30.0,
-        "ramp_up_duration": 5.0,
-        "test_duration": 60.0,
-        "success_rate_threshold": 0.95
-    }
-
-
-# Global fixtures for mocking
-@pytest.fixture(autouse=True)
-def mock_file_exists(monkeypatch):
-    """Mock os.path.exists to always return True for data files."""
-    def mock_exists(path):
-        if "data/" in path and path.endswith(".rda"):
-            return True
-        return False
-
-    monkeypatch.setattr("os.path.exists", mock_exists)
-
-
-# Async calibration mock fixtures
-@pytest.fixture
-def mock_async_calibration_service():
-    """Mock async calibration service."""
-    class MockAsyncCalibrationService:
-        def __init__(self):
-            self.jobs = {}
-            self.job_counter = 0
-
-        async def create_job(self, request_data: Dict[str, Any]) -> str:
-            self.job_counter += 1
-            job_id = f"mock-job-{self.job_counter}"
-
-            self.jobs[job_id] = {
-                "job_id": job_id,
-                "status": "pending",
-                "created_at": datetime.utcnow().isoformat(),
-                "progress": 0,
-                "stage": "queued",
-                "request_data": request_data
-            }
-
-            return job_id
-
-        async def get_job_status(self, job_id: str) -> Dict[str, Any]:
-            return self.jobs.get(job_id)
-
-        async def update_job_status(self, job_id: str, updates: Dict[str, Any]):
-            if job_id in self.jobs:
-                self.jobs[job_id].update(updates)
-
-        async def cancel_job(self, job_id: str) -> bool:
-            if job_id in self.jobs:
-                self.jobs[job_id]["status"] = "cancelled"
-                self.jobs[job_id]["cancelled_at"] = datetime.utcnow().isoformat()
-                return True
-            return False
-
-        async def delete_job(self, job_id: str) -> bool:
-            if job_id in self.jobs:
-                del self.jobs[job_id]
-                return True
-            return False
-
-        def list_jobs(self, limit: int = 50, status: str = None) -> List[Dict[str, Any]]:
-            jobs = list(self.jobs.values())
-
-            if status:
-                jobs = [job for job in jobs if job["status"] == status]
-
-            return jobs[:limit]
-
-    return MockAsyncCalibrationService()
-
-
-# WebSocket testing utilities
-@pytest.fixture
-def websocket_test_utils():
-    """Utilities for WebSocket testing."""
-    class WebSocketTestUtils:
-        @staticmethod
-        async def simulate_connection(websocket, job_id: str, duration: float = 1.0):
-            """Simulate a WebSocket connection for testing."""
-            await websocket.accept()
-
-            # Send some test messages
-            messages = [
-                {"type": "log", "message": "Job started", "timestamp": datetime.utcnow().isoformat()},
-                {"type": "progress", "progress": 25, "stage": "processing"},
-                {"type": "progress", "progress": 50, "stage": "calibrating"},
-                {"type": "log", "message": "Job completed", "timestamp": datetime.utcnow().isoformat()}
-            ]
-
-            for msg in messages:
-                await websocket.send_json(msg)
-                await asyncio.sleep(duration / len(messages))
-
-        @staticmethod
-        async def collect_messages(websocket, timeout: float = 5.0):
-            """Collect messages from WebSocket with timeout."""
-            messages = []
-
-            try:
-                while True:
-                    message = await asyncio.wait_for(
-                        websocket.receive_json(),
-                        timeout=timeout
-                    )
-                    messages.append(message)
-            except asyncio.TimeoutError:
-                pass
-
-            return messages
-
-    return WebSocketTestUtils()
-
-
 @pytest.fixture
 def mock_tempfile(tmp_path):
     """Mock tempfile.TemporaryDirectory to use pytest tmp_path."""
@@ -581,32 +302,18 @@ def mock_tempfile(tmp_path):
     return mock_temp_dir
 
 
-class MockFileHandler:
-    """Helper class for mocking file operations in tests."""
-
-    def __init__(self):
-        self.files = {}
-
-    def write_json(self, filepath: str, data: Dict[str, Any]):
-        """Mock writing JSON to file."""
-        self.files[filepath] = data
-
-    def read_json(self, filepath: str) -> Dict[str, Any]:
-        """Mock reading JSON from file."""
-        return self.files.get(filepath, {})
-
-    def file_exists(self, filepath: str) -> bool:
-        """Mock file existence check."""
-        return filepath in self.files
-
-
 @pytest.fixture
-def mock_file_handler():
-    """Fixture providing mock file handler."""
-    return MockFileHandler()
+def edge_case_data():
+    """Edge case test data."""
+    return {
+        "empty_data": {"data": [], "age_group": "neonate"},
+        "missing_fields": {"data": [{"ID": "d1"}], "age_group": "neonate"},
+        "invalid_age_group": {"age_group": "invalid"},
+        "unknown_country": {"country": "Unknown", "age_group": "neonate"},
+        "negative_counts": {"data": [-1, -2, -3], "age_group": "neonate"}
+    }
 
 
-# Performance test fixtures
 @pytest.fixture
 def performance_test_data():
     """Large dataset for performance testing."""
@@ -622,137 +329,13 @@ def performance_test_data():
     }
 
 
-# Error scenarios
-@pytest.fixture
-def malicious_input_data():
-    """Test data for security testing."""
-    return {
-        "sql_injection": {
-            "data": [{"id": "'; DROP TABLE users; --", "cause": "test"}],
-            "age_group": "neonate"
-        },
-        "command_injection": {
-            "country": "Mozambique; rm -rf /",
-            "age_group": "neonate"
-        },
-        "oversized_data": {
-            "va_data": {
-                "insilicova": [{"ID": f"d{i}", "cause": "test"} for i in range(100000)]
-            }
-        }
-    }
-
-
-@pytest.fixture
-def edge_case_data():
-    """Edge case test data."""
-    return {
-        "empty_data": {"data": [], "age_group": "neonate"},
-        "missing_fields": {"data": [{"ID": "d1"}], "age_group": "neonate"},
-        "invalid_age_group": {"age_group": "invalid"},
-        "unknown_country": {"country": "Unknown", "age_group": "neonate"},
-        "negative_counts": {"data": [-1, -2, -3], "age_group": "neonate"}
-    }
-
-
-# Async-specific fixtures for async calibration testing
-@pytest.fixture
-def async_calibration_request():
-    """Sample async calibration request."""
-    return {
-        "va_data": {
-            "insilicova": [
-                {"ID": "async_d1", "cause": "Birth asphyxia"},
-                {"ID": "async_d2", "cause": "Neonatal sepsis"}
-            ]
-        },
-        "age_group": "neonate",
-        "country": "Mozambique",
-        "mmat_type": "prior",
-        "ensemble": True,
-        "user_id": "test-async-user"
-    }
-
-
-@pytest.fixture
-def websocket_test_messages():
-    """Sample WebSocket messages for testing."""
-    return [
-        {
-            "type": "log",
-            "timestamp": datetime.utcnow().isoformat(),
-            "level": "INFO",
-            "message": "Starting calibration process"
-        },
-        {
-            "type": "progress",
-            "progress": 25,
-            "stage": "data_loading",
-            "eta": "2 minutes"
-        },
-        {
-            "type": "log",
-            "timestamp": datetime.utcnow().isoformat(),
-            "level": "DEBUG",
-            "message": "Running R script with parameters"
-        },
-        {
-            "type": "progress",
-            "progress": 50,
-            "stage": "calibration_running",
-            "eta": "1 minute"
-        },
-        {
-            "type": "status",
-            "status": "completed",
-            "results": {
-                "uncalibrated": {"pneumonia": 0.15},
-                "calibrated": {"insilicova": {"pneumonia": 0.12}}
-            }
-        }
-    ]
-
-
-@pytest.fixture
-def concurrent_job_requests(sample_calibration_request):
-    """Generate multiple calibration requests for concurrent testing."""
-    def generate_requests(count: int = 10):
-        requests = []
-        for i in range(count):
-            request = {
-                **sample_calibration_request,
-                "async_mode": True,
-                "user_id": f"concurrent-user-{i}",
-                "country": ["Mozambique", "Kenya", "Ethiopia"][i % 3]
-            }
-            requests.append(request)
-        return requests
-
-    return generate_requests
-
-
-# Cleanup fixtures
-@pytest_asyncio.fixture(autouse=True)
-async def cleanup_async_resources():
-    """Automatically cleanup async resources after each test."""
-    # Before test
-    yield
-
-    # After test cleanup
-    # Cancel any running tasks
-    tasks = [task for task in asyncio.all_tasks() if not task.done()]
-    for task in tasks:
-        if not task.cancelled():
-            task.cancel()
-
-    # Wait for tasks to complete
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-
+# Global fixtures for mocking
 @pytest.fixture(autouse=True)
-def reset_mock_state():
-    """Reset mock state between tests."""
-    # Reset any global mock state here
-    yield
-    # Cleanup after test
+def mock_file_exists(monkeypatch):
+    """Mock os.path.exists to always return True for data files."""
+    def mock_exists(path):
+        if "data/" in path and path.endswith(".rda"):
+            return True
+        return False
+
+    monkeypatch.setattr("os.path.exists", mock_exists)
