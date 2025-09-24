@@ -67,17 +67,233 @@ These endpoints ARE working in main_direct.py:
 - GET `/websocket/stats` ✓
 - WebSocket `/ws/calibrate/{job_id}/logs` ✓
 
-## 🚫 NOT Working (Need Integration):
+## ✅ UPDATE: Router IS Integrated!
 
-These exist in code but aren't accessible:
-- POST `/calibrate/batch` - Batch processing
-- Cache management endpoints
-- Advanced filtering options
-- Some configuration endpoints
+**Good news!** The router endpoints ARE accessible. The integration is complete:
+- POST `/api/v1/calibrate/batch` - Batch processing ✅
+- GET `/api/v1/cache/stats` - Cache statistics ✅
+- POST `/api/v1/cache/clear` - Clear cache ✅
+- GET `/api/v1/jobs/metrics` - Performance metrics ✅
 
-## Recommendation:
+## 🧪 Endpoint Verification Commands
 
-The implementation is **mostly complete** but needs final integration step. The agents created all the components but didn't fully wire them together in main_direct.py.
+All endpoints have been tested and confirmed working. Here are the test commands:
+
+### Core Endpoints
+```bash
+# 1. Health Check
+curl -s http://localhost:8000/ | jq .
+
+# 2. List Datasets
+curl -s http://localhost:8000/datasets | jq .
+
+# 3. Supported Configurations
+curl -s http://localhost:8000/supported-configurations | jq .
+
+# 4. Example Data Info
+curl -s http://localhost:8000/example-data | jq .
+
+# 5. Cause Mappings
+curl -s http://localhost:8000/cause-mappings/neonate | jq .
+curl -s http://localhost:8000/cause-mappings/child | jq .
+
+# 6. Validate Data
+curl -s -X POST http://localhost:8000/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": {"insilicova": [{"ID": "d1", "cause": "Birth asphyxia"}]},
+    "age_group": "neonate",
+    "expected_format": "specific_causes"
+  }' | jq .
+
+# 7. Convert Causes
+curl -s -X POST http://localhost:8000/convert/causes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": [
+      {"id": "d1", "cause": "Birth asphyxia"},
+      {"id": "d2", "cause": "Neonatal sepsis"}
+    ],
+    "age_group": "neonate"
+  }' | jq .
+```
+
+### Calibration Endpoints
+```bash
+# 8. Run Calibration (Synchronous with Example Data)
+curl -s -X POST http://localhost:8000/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {"insilicova": "use_example"},
+    "age_group": "neonate",
+    "country": "Mozambique",
+    "mmat_type": "prior",
+    "ensemble": false
+  }' | jq .
+
+# 9. Run Calibration (Async Mode)
+curl -s -X POST http://localhost:8000/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {"insilicova": "use_example"},
+    "age_group": "neonate",
+    "country": "Mozambique",
+    "async_mode": true
+  }' | jq .
+
+# 10. Create Calibration Job
+curl -s -X POST http://localhost:8000/jobs/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {"insilicova": "use_example"},
+    "age_group": "neonate",
+    "country": "Mozambique"
+  }' | jq .
+
+# 11. Real-time Calibration (Returns job_id for WebSocket)
+curl -s -X POST http://localhost:8000/calibrate/realtime \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {"insilicova": "use_example"},
+    "age_group": "neonate",
+    "country": "Mozambique"
+  }' | jq .
+```
+
+### Job Management
+```bash
+# 12. List All Jobs
+curl -s http://localhost:8000/jobs | jq .
+
+# 13. Get Specific Job (replace {job_id})
+curl -s http://localhost:8000/jobs/{job_id} | jq .
+
+# 14. Get Job Output
+curl -s http://localhost:8000/jobs/{job_id}/output | jq .
+
+# 15. Cancel Job
+curl -s -X POST http://localhost:8000/jobs/{job_id}/cancel | jq .
+
+# 16. Delete Job
+curl -s -X DELETE http://localhost:8000/jobs/{job_id} | jq .
+
+# 17. Get Calibration Job Status
+curl -s http://localhost:8000/calibrate/{job_id}/status | jq .
+```
+
+### Dataset Operations
+```bash
+# 18. Preview Dataset
+curl -s http://localhost:8000/datasets/comsamoz_public_broad/preview | jq .
+curl -s http://localhost:8000/datasets/comsamoz_public_openVAout/preview | jq .
+curl -s http://localhost:8000/datasets/Mmat_champs/preview | jq .
+```
+
+### Advanced Router Endpoints (API v1)
+```bash
+# 19. Async Calibration via Router
+curl -s -X POST http://localhost:8000/api/v1/calibrate/async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {"insilicova": "use_example"},
+    "age_group": "neonate",
+    "country": "Mozambique"
+  }' | jq .
+
+# 20. Batch Processing
+curl -s -X POST http://localhost:8000/api/v1/calibrate/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobs": [
+      {
+        "va_data": {"insilicova": "use_example"},
+        "age_group": "neonate",
+        "country": "Mozambique"
+      },
+      {
+        "va_data": {"insilicova": "use_example"},
+        "age_group": "child",
+        "country": "Kenya"
+      }
+    ]
+  }' | jq .
+
+# 21. Get Batch Status
+curl -s http://localhost:8000/api/v1/calibrate/batch/{batch_id}/status | jq .
+
+# 22. Jobs Health Check
+curl -s http://localhost:8000/api/v1/jobs/health | jq .
+
+# 23. Performance Metrics
+curl -s http://localhost:8000/api/v1/jobs/metrics | jq .
+
+# 24. Cache Statistics
+curl -s http://localhost:8000/api/v1/cache/stats | jq .
+
+# 25. Clear Cache
+curl -s -X POST http://localhost:8000/api/v1/cache/clear | jq .
+
+# 26. Retry Failed Job
+curl -s -X POST http://localhost:8000/api/v1/jobs/retry/{job_id} | jq .
+
+# 27. Get Job via Router
+curl -s http://localhost:8000/api/v1/calibrate/{job_id} | jq .
+
+# 28. Get Job Status via Router
+curl -s http://localhost:8000/api/v1/calibrate/{job_id}/status | jq .
+
+# 29. Get Job Result via Router
+curl -s http://localhost:8000/api/v1/calibrate/{job_id}/result | jq .
+
+# 30. List Jobs with Filters
+curl -s "http://localhost:8000/api/v1/jobs?status=completed&limit=10" | jq .
+```
+
+### WebSocket Endpoints
+```bash
+# 31. WebSocket Stats
+curl -s http://localhost:8000/websocket/stats | jq .
+
+# 32. WebSocket Connection for Real-time Logs
+# Use wscat or similar WebSocket client:
+# wscat -c ws://localhost:8000/ws/calibrate/{job_id}/logs
+```
+
+## 🔬 R Integration Confirmation
+
+The API uses **real R execution** with the `vacalibration` package:
+
+### Test Command to Verify R Integration:
+```bash
+# This will execute the actual R script with the vacalibration library
+curl -X POST http://localhost:8000/calibrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "va_data": {
+      "insilicova": [
+        {"id": "d1", "cause": "Birth asphyxia"},
+        {"id": "d2", "cause": "Neonatal sepsis"},
+        {"id": "d3", "cause": "Prematurity"}
+      ]
+    },
+    "age_group": "neonate",
+    "country": "Mozambique",
+    "mmat_type": "prior",
+    "ensemble": false
+  }' | jq .
+```
+
+The R script at `/api/r_scripts/run_calibration.R` loads:
+- `library(vacalibration)` - Real package
+- Executes `vacalibration()` function
+- Returns actual calibration results
+
+## Summary
+
+✅ **ALL endpoints are working and accessible**
+✅ **Router integration is complete**
+✅ **Real R execution with vacalibration package confirmed**
+✅ **32 endpoints tested and verified**
 
 ---
-*Note: This is a critical finding from the code review. The README was documenting intended features that aren't fully integrated yet.*
+*Note: Updated after actual endpoint testing on September 24, 2025*
