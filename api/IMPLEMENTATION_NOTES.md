@@ -79,6 +79,9 @@ These endpoints ARE working in main_direct.py:
 
 All endpoints have been tested and confirmed working. Here are the test commands:
 
+```
+cd api && poetry run uvicorn app.main_direct:app --host 0.0.0.0 --port 8000 --reload
+```
 ### Core Endpoints
 ```bash
 # 1. Health Check
@@ -288,12 +291,149 @@ The R script at `/api/r_scripts/run_calibration.R` loads:
 - Executes `vacalibration()` function
 - Returns actual calibration results
 
+## 🔄 WebSocket Real-Time Streaming (CONFIRMED WORKING)
+
+### WebSocket Message Structure
+The WebSocket implementation successfully streams real-time calibration progress. Messages follow this structure:
+
+```json
+{
+  "type": "log|progress|status|result|error|connection",
+  "job_id": "uuid-here",
+  "timestamp": "2025-09-24T19:45:40.331227Z",
+  "data": {
+    // Message-specific content
+  },
+  "sequence": 1
+}
+```
+
+### Message Types and Data Fields:
+- **connection**: `{"status": "connected", "message": "Connected to job..."}`
+- **log**: `{"line": "Log message", "level": "info", "source": "R_script"}`
+- **progress**: `{"progress": 50.0, "stage": "Running calibration", "percentage": "50.0%"}`
+- **status**: `{"status": "running", "message": "Status update"}`
+- **result**: `{"result": {...calibration results...}, "completed_at": "..."}`
+- **error**: `{"error": "Error message", "details": "..."}`
+
+### Working WebSocket Test Sequence:
+```bash
+# 1. Create calibration job
+RESPONSE=$(curl -s -X POST http://localhost:8000/calibrate/realtime \
+  -H "Content-Type: application/json" \
+  -d '{"va_data": {"insilicova": "use_example"}, "age_group": "neonate", "country": "Mozambique"}')
+
+# 2. Extract job ID
+JOB_ID=$(echo $RESPONSE | jq -r '.job_id')
+
+# 3. Connect to WebSocket for real-time logs
+wscat -c ws://localhost:8000/ws/calibrate/$JOB_ID/logs
+```
+
+### Actual WebSocket Log Output Example:
+```
+[CONNECTION] Connected to job fc8bf194-e84c-47e6-80b3-23b2378e6997
+[PROGRESS] 0.0% - Preparing data
+[LOG-INFO] Created temporary directory: /var/folders/.../vacalib_fc8bf194...
+[PROGRESS] 10.0% - Writing input files
+[PROGRESS] 20.0% - Executing R script
+[LOG-INFO] PROGRESS: 25% - Processing insilicova data
+[LOG-INFO] PROGRESS: 35% - Loading example neonate data
+[PROGRESS] 50.0% - Starting calibration
+[PROGRESS] 80.0% - Processing calibration results
+[PROGRESS] 90.0% - Formatting output data
+[PROGRESS] 100.0% - Complete
+[RESULT] Calibration completed with confidence intervals
+```
+
+## 📊 WebSocket Stats Clarification
+
+### IMPORTANT: `/websocket/stats` Only Shows Active Connections
+
+The `/websocket/stats` endpoint tracks **active WebSocket connections**, not all jobs:
+
+| Scenario | total_jobs | total_connections | Explanation |
+|----------|------------|-------------------|-------------|
+| Job created, no WS connected | 0 | 0 | Job exists but no active connections |
+| 1 WebSocket connected | 1 | 1 | One job with one connection |
+| 2 WebSockets to same job | 1 | 2 | One job with two connections |
+| All WebSockets closed | 0 | 0 | Job still exists, no connections |
+
+### Test Results Demonstrating Behavior:
+```python
+# After creating job (no WebSocket):
+{"total_jobs": 0, "total_connections": 0}  # Job exists but not counted
+
+# With WebSocket connected:
+{"total_jobs": 1, "total_connections": 1, "jobs": {"job-id": {"connections": 1}}}
+
+# Job still accessible via status endpoint even when stats show 0
+GET /calibrate/{job_id}/status → Returns job details
+```
+
+## 🎯 Complete Real-Time Calibration Workflow
+
+### Step-by-Step Process:
+1. **Create Job** → Returns `job_id`
+2. **Connect WebSocket** → Receive real-time updates
+3. **Stream Progress** → 0% to 100% with stage descriptions
+4. **Receive Results** → Final calibration with confidence intervals
+
+### Example Calibration Results Structure:
+```json
+{
+  "results": {
+    "status": "success",
+    "uncalibrated": [0.0008, 0.1244, 0.305, 0.2748, 0.0521, 0.2429],
+    "calibrated": {
+      "insilicova": {
+        "mean": {
+          "congenital_malformation": 0.0008,
+          "pneumonia": 0.1086,
+          "sepsis_meningitis_inf": 0.5602,
+          "ipre": 0.1983,
+          "other": 0.0521,
+          "prematurity": 0.08
+        },
+        "lower_ci": {...},
+        "upper_ci": {...}
+      }
+    },
+    "job_id": "fc8bf194-e84c-47e6-80b3-23b2378e6997",
+    "age_group": "neonate",
+    "country": "Mozambique"
+  }
+}
+```
+
+## 🔧 Important Implementation Details
+
+### WebSocket Message Parsing
+- Messages have a nested `data` field containing actual content
+- The `message` field is inside `data`, not at the root level
+- Example correct parsing:
+  ```python
+  msg = json.loads(websocket_message)
+  actual_content = msg['data'].get('line') or msg['data'].get('message')
+  ```
+
+### Job Persistence vs Connection Tracking
+- Jobs continue running regardless of WebSocket connections
+- `/websocket/stats` reflects server load, not job queue
+- Use `/calibrate/{job_id}/status` to check actual job status
+
+### R Script Integration Confirmation
+- Real R process execution with progress reporting
+- Temporary directories created and cleaned up
+- Progress updates from R script successfully streamed via WebSocket
+
 ## Summary
 
 ✅ **ALL endpoints are working and accessible**
 ✅ **Router integration is complete**
 ✅ **Real R execution with vacalibration package confirmed**
-✅ **32 endpoints tested and verified**
+✅ **WebSocket real-time streaming fully functional**
+✅ **35+ endpoints tested and verified**
 
 ---
-*Note: Updated after actual endpoint testing on September 24, 2025*
+*Note: Updated after WebSocket testing on September 24, 2025*
