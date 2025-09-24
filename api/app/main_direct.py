@@ -38,6 +38,11 @@ from .websocket_handler import (
 from .calibration_service import (
     get_calibration_service
 )
+from .security import setup_security
+from .validation import (
+    validate_va_data, ValidationError as CustomValidationError,
+    EnhancedValidationMiddleware
+)
 
 # Import the router with batch endpoints
 from .router import router as api_router
@@ -56,6 +61,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Setup security (API key authentication and rate limiting)
+setup_security(app, enable_api_key=True, enable_rate_limit=True)
 
 # Include routers
 app.include_router(websocket_router, prefix="/ws", tags=["websockets"])
@@ -214,9 +222,10 @@ class CalibrationRequest(BaseModel):
         default=True,
         description="Whether to perform ensemble calibration"
     )
-    async_mode: bool = Field(
+    async_: bool = Field(
         default=False,
-        description="Whether to run calibration asynchronously"
+        description="Whether to run calibration asynchronously",
+        alias="async"
     )
 
     @validator('va_data', pre=True)
@@ -311,83 +320,76 @@ async def root():
 
 @app.post("/calibrate")
 async def calibrate(request: CalibrationRequest):
-    """Run calibration directly or asynchronously based on async_mode parameter"""
+    """Run calibration directly or asynchronously based on async parameter"""
+
+    # Apply enhanced validation
+    try:
+        request_data = request.model_dump()
+        # Determine data format if not specified
+        data_format = 'specific_causes'  # default
+        if request_data.get('va_data'):
+            sample_data = next(iter(request_data['va_data'].values()))
+            if sample_data == 'use_example':
+                pass  # Keep as is
+            elif isinstance(sample_data, list) and sample_data:
+                if isinstance(sample_data[0], dict):
+                    data_format = 'specific_causes'
+                elif isinstance(sample_data[0], list):
+                    data_format = 'broad_causes'
+            elif isinstance(sample_data, dict):
+                data_format = 'death_counts'
+
+            validated_data = validate_va_data(
+                request_data['va_data'],
+                request_data.get('age_group', 'adult'),
+                data_format
+            )
+            request_data['va_data'] = validated_data
+    except CustomValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error_code": "INVALID_DATA_FORMAT",
+                "message": e.message,
+                "field": e.field,
+                "value": str(e.value) if e.value else None
+            }
+        )
 
     # Check if async mode is requested
-    if request.async_mode:
-        # Convert to async request format
-        async_request = AsyncCalibrationRequest(
-            va_data=request.va_data,
-            age_group=request.age_group.value,
-            country=request.country,
-            mmat_type=request.mmat_type,
-            ensemble=request.ensemble
+    if request.async_:
+        # Use calibration service for async execution
+        calibration_service = get_calibration_service()
+        job_id = calibration_service.create_job(request_data)
+
+        # Start calibration in background
+        import asyncio
+        asyncio.create_task(calibration_service.run_calibration(job_id))
+
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "message": "Calibration job started. Connect to WebSocket or poll status endpoint for updates.",
+            "urls": {
+                "status": f"/calibrate/{job_id}/status",
+                "websocket": f"ws://localhost:8000/calibrate/{job_id}/logs"
+            },
+            "estimated_duration_seconds": 15
+        }
+
+    # Otherwise run synchronously using service layer
+    calibration_service = get_calibration_service()
+    job_id = calibration_service.create_job(request_data)
+
+    try:
+        # Run calibration synchronously
+        result = await calibration_service.run_calibration(job_id)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Calibration failed: {str(e)}"
         )
-        return await start_async_calibration(async_request)
-
-    # Otherwise run synchronously (existing behavior)
-    # Check R is available
-    r_ready, r_msg = check_r_setup()
-    if not r_ready:
-        raise HTTPException(status_code=500, detail=f"R not ready: {r_msg}")
-
-    # Create temp directory
-    with tempfile.TemporaryDirectory(prefix="vacalib_") as tmpdir:
-        input_file = os.path.join(tmpdir, "input.json")
-        output_file = os.path.join(tmpdir, "output.json")
-
-        # Prepare request data
-        request_data = request.model_dump()
-
-        # If no va_data provided, use example
-        if not request_data.get("va_data"):
-            request_data["va_data"] = {"insilicova": "use_example"}
-
-        # Write input
-        with open(input_file, 'w') as f:
-            json.dump(request_data, f)
-
-        # Create inline R script
-        r_script_file = os.path.join(tmpdir, "run.R")
-        with open(r_script_file, 'w') as f:
-            f.write(get_r_script())
-
-        # Run R script
-        cmd = ["Rscript", r_script_file, input_file, output_file]
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.getcwd())
-
-        # Check for output
-        if os.path.exists(output_file):
-            with open(output_file, 'r') as f:
-                output_data = json.load(f)
-
-            if output_data.get("success"):
-                return {
-                    "status": "success",
-                    "uncalibrated": output_data.get("uncalibrated", {}),
-                    "calibrated": output_data.get("calibrated", {}),
-                    "age_group": request.age_group,
-                    "country": request.country
-                }
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=output_data.get("error", "Calibration failed")
-                )
-        else:
-            # Try to parse stdout as JSON if no output file
-            if result.stdout:
-                try:
-                    output_data = json.loads(result.stdout)
-                    if output_data.get("success"):
-                        return output_data
-                except:
-                    pass
-
-            raise HTTPException(
-                status_code=500,
-                detail=f"R script failed: {result.stderr or result.stdout}"
-            )
 
 
 # Async calibration endpoints
@@ -437,9 +439,9 @@ async def delete_job(job_id: str):
 @app.post("/calibrate/realtime")
 async def create_realtime_calibration(request: CalibrationRequest):
     """Create a new calibration job with real-time WebSocket updates"""
-    if not request.async_mode:
-        # Force async mode for real-time calibrations
-        request.async_mode = True
+    # Real-time calibrations are always async
+    if not request.async_:
+        request.async_ = True
 
     # Convert to async request
     async_request = AsyncCalibrationRequest(
@@ -850,8 +852,8 @@ def _validate_algorithm_data(
         # Detect format and validate
         if isinstance(data, list) and len(data) > 0:
             if isinstance(data[0], dict):
-                # Check for specific causes format
-                if 'cause' in data[0] and 'id' in data[0]:
+                # Check for specific causes format (support both 'id' and 'ID')
+                if 'cause' in data[0] and ('id' in data[0] or 'ID' in data[0]):
                     detected_format = "specific_causes"
                     sample_size = len(data)
 
@@ -859,8 +861,8 @@ def _validate_algorithm_data(
                     for i, record in enumerate(data):
                         if 'cause' not in record:
                             issues.append(f"Record {i} missing 'cause' field")
-                        if 'id' not in record:
-                            issues.append(f"Record {i} missing 'id' field")
+                        if 'id' not in record and 'ID' not in record:
+                            issues.append(f"Record {i} missing 'id' or 'ID' field")
 
                     # Get cause distribution
                     causes = [record.get('cause', 'unknown') for record in data]
@@ -868,7 +870,7 @@ def _validate_algorithm_data(
 
                 else:
                     detected_format = "unknown_dict"
-                    issues.append("Dictionary format detected but missing required 'cause' and 'id' fields")
+                    issues.append("Dictionary format detected but missing required 'cause' and 'id'/'ID' fields")
 
             elif isinstance(data[0], list):
                 # Binary matrix format
@@ -1107,12 +1109,35 @@ tryCatch({
     # Read input
     input_data <- fromJSON(input_file)
 
+    cat("Input data structure:\\n")
+    cat("Class of input_data$data:", class(input_data$data), "\\n")
+    cat("Length of input_data$data:", length(input_data$data), "\\n")
+
     # Create data frame for cause_map
-    df_causes <- data.frame(
-        ID = sapply(input_data$data, function(x) as.character(x$id)),
-        cause = sapply(input_data$data, function(x) as.character(x$cause)),
-        stringsAsFactors = FALSE
-    )
+    # jsonlite automatically converts array of objects to data frame
+    if (is.data.frame(input_data$data)) {
+        df_causes <- input_data$data
+        # Ensure column names are correct for cause_map
+        if ("id" %in% names(df_causes) && !"ID" %in% names(df_causes)) {
+            names(df_causes)[names(df_causes) == "id"] <- "ID"
+        }
+    } else if (is.list(input_data$data)) {
+        # Fallback for list format
+        ids <- c()
+        causes <- c()
+        for(i in seq_along(input_data$data)) {
+            item <- input_data$data[[i]]
+            ids <- c(ids, as.character(item[["id"]]))
+            causes <- c(causes, as.character(item[["cause"]]))
+        }
+        df_causes <- data.frame(
+            ID = ids,
+            cause = causes,
+            stringsAsFactors = FALSE
+        )
+    } else {
+        stop("Unexpected data format")
+    }
 
     # Use cause_map to convert
     broad_cause_matrix <- cause_map(df = df_causes, age_group = input_data$age_group)
@@ -1131,8 +1156,8 @@ tryCatch({
         broad_cause <- if(length(broad_cause_idx) > 0) colnames(broad_cause_matrix)[broad_cause_idx[1]] else "other"
 
         converted_data[[i]] <- list(
-            id = input_data$data[[i]]$id,
-            specific_cause = input_data$data[[i]]$cause,
+            id = df_causes$ID[i],
+            specific_cause = df_causes$cause[i],
             broad_cause = broad_cause
         )
     }

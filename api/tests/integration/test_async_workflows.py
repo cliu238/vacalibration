@@ -52,7 +52,7 @@ class TestAsyncCalibrationWorkflows:
             
             response = await async_client.post(
                 "/calibrate", 
-                json={**sample_calibration_request, "async_mode": True}
+                json={**sample_calibration_request, "async": True}
             )
             
             assert response.status_code == 202
@@ -143,7 +143,7 @@ class TestAsyncCalibrationWorkflows:
             
             response = await async_client.post(
                 "/calibrate", 
-                json={**sample_calibration_request, "async_mode": True}
+                json={**sample_calibration_request, "async": True}
             )
             
             job_id = response.json()["job_id"]
@@ -209,7 +209,7 @@ class TestAsyncCalibrationWorkflows:
             
             response = await async_client.post(
                 "/calibrate", 
-                json={**sample_calibration_request, "async_mode": True}
+                json={**sample_calibration_request, "async": True}
             )
             
             job_id = response.json()["job_id"]
@@ -269,7 +269,7 @@ class TestAsyncCalibrationWorkflows:
                 # Vary request parameters
                 request_data = {
                     **sample_calibration_request,
-                    "async_mode": True,
+                    "async": True,
                     "country": ["Mozambique", "Kenya", "Ethiopia"][i % 3],
                     "user_id": f"user-{i}"
                 }
@@ -513,7 +513,7 @@ class TestAsyncPerformanceAndLoad:
                 for i in range(num_jobs // concurrent_groups):
                     request_data = {
                         **sample_calibration_request,
-                        "async_mode": True,
+                        "async": True,
                         "user_id": f"perf-user-{group}-{i}"
                     }
 
@@ -567,7 +567,7 @@ class TestAsyncPerformanceAndLoad:
                 
                 request_data = {
                     **sample_calibration_request,
-                    "async_mode": True,
+                    "async": True,
                     "user_id": f"concurrent-user-{i}"
                 }
                 
@@ -660,7 +660,7 @@ class TestAsyncPerformanceAndLoad:
             # Submit large dataset
             large_request = {
                 **performance_test_data,
-                "async_mode": True
+                "async": True
             }
             
             response = await async_client.post("/calibrate", json=large_request)
@@ -701,7 +701,7 @@ class TestAsyncPerformanceAndLoad:
             
             response = await async_client.post(
                 "/calibrate", 
-                json={**sample_calibration_request, "async_mode": True}
+                json={**sample_calibration_request, "async": True}
             )
             
             job_id = response.json()["job_id"]
@@ -764,7 +764,7 @@ class TestAsyncPerformanceAndLoad:
             # Create job with retry enabled
             request_data = {
                 **sample_calibration_request,
-                "async_mode": True,
+                "async": True,
                 "retry_on_failure": True
             }
             
@@ -826,7 +826,7 @@ class TestAsyncCalibrationSecurity:
             
             request_data = {
                 **sample_calibration_request,
-                "async_mode": True,
+                "async": True,
                 "user_id": user1_id
             }
             
@@ -884,7 +884,7 @@ class TestAsyncCalibrationSecurity:
                 
                 request_data = {
                     **sample_calibration_request,
-                    "async_mode": True,
+                    "async": True,
                     "user_id": user_id
                 }
                 
@@ -914,7 +914,7 @@ class TestAsyncCalibrationSecurity:
                 # SQL injection attempt
                 "country": "Mozambique'; DROP TABLE jobs; --",
                 "age_group": "neonate",
-                "async_mode": True
+                "async": True
             },
             {
                 # XSS attempt
@@ -924,13 +924,13 @@ class TestAsyncCalibrationSecurity:
                     ]
                 },
                 "age_group": "neonate",
-                "async_mode": True
+                "async": True
             },
             {
                 # Path traversal attempt
                 "country": "../../../etc/passwd",
                 "age_group": "neonate",
-                "async_mode": True
+                "async": True
             }
         ]
         

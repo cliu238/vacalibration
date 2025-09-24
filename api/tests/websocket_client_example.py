@@ -187,7 +187,7 @@ async def example_usage():
         "country": "Mozambique",
         "mmat_type": "prior",
         "ensemble": True,
-        "async_mode": True
+        "async": True
     }
 
     try:

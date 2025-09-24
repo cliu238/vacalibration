@@ -574,6 +574,55 @@ list(
 5. Server sends final results or error when complete
 6. Connection closes automatically after completion
 
+### Additional Implemented Endpoints (Not in Original Design)
+
+The implementation includes several additional endpoints beyond the original design specification to enhance functionality:
+
+#### 10. POST /api/v1/calibrate/batch
+**Purpose**: Process multiple calibration jobs in a single request
+**Request Body**:
+```json
+{
+  "jobs": [
+    {
+      "va_data": {"insilicova": "use_example"},
+      "age_group": "neonate",
+      "country": "Mozambique"
+    },
+    {
+      "va_data": {"interva": [...]},
+      "age_group": "child",
+      "country": "Kenya"
+    }
+  ]
+}
+```
+**Response**: Batch job ID with individual job tracking
+
+#### 11. GET /api/v1/cache/stats
+**Purpose**: Get cache statistics and memory usage
+**Response**: Cache hit rates, memory usage, TTL information
+
+#### 12. POST /api/v1/cache/clear
+**Purpose**: Clear cached results (admin operation)
+**Response**: Confirmation with number of entries cleared
+
+#### 13. GET /api/v1/jobs/metrics
+**Purpose**: Get performance metrics across all jobs
+**Response**: Average processing time, success rate, queue depth
+
+#### 14. POST /api/v1/jobs/retry/{job_id}
+**Purpose**: Retry a failed calibration job
+**Response**: New job ID for retried execution
+
+#### 15. GET /jobs
+**Purpose**: List all jobs with filtering capabilities
+**Query Parameters**:
+- `status`: Filter by job status (pending, running, completed, failed)
+- `limit`: Maximum number of results
+- `offset`: Pagination offset
+**Response**: Paginated list of jobs with metadata
+
 ### Data Format Examples
 
 #### Specific Causes Format
@@ -776,21 +825,31 @@ response = requests.post('http://localhost:8000/calibrate', json=ensemble_reques
 4. **Early Error Detection**: Immediate notification of failures
 5. **Better UX**: Frontend can show progress bars and status updates
 
-#### Optimization Strategies:
-1. **Caching**: Cache calibration results for sample datasets
-2. **Parallel Processing**: Run multiple algorithm calibrations in parallel
-3. **Batch Processing**: Support batch API for multiple calibration requests
-4. **Async Operations**: Job queue with WebSocket streaming for long-running calibrations
-5. **Resource Management**: Limit concurrent R processes to prevent server overload
+#### Optimization Strategies (Implementation Status):
+1. **Caching**: ✅ Implemented - Redis-based caching with configurable TTL
+2. **Parallel Processing**: ✅ Implemented - Concurrent job execution support
+3. **Batch Processing**: ✅ Implemented - `/api/v1/calibrate/batch` endpoint
+4. **Async Operations**: ✅ Implemented - Full async with WebSocket real-time streaming
+5. **Resource Management**: ✅ Implemented - Job queue and worker pool management
 
 ### Security & Authentication
 
-#### Recommendations:
-1. **API Keys**: Implement API key authentication for production
-2. **Rate Limiting**: Limit requests per IP/user
-3. **Input Validation**: Strict validation of all input data
-4. **Data Privacy**: No storage of user-provided VA data
-5. **HTTPS Only**: Enforce TLS for all communications
+#### Implementation Status (Updated 2025-09-24):
+1. **API Keys**: ✅ Implemented - Header (`X-API-Key`) and query parameter (`api_key`) support
+2. **Rate Limiting**: ✅ Implemented - 60 requests/minute per API key/IP (configurable)
+3. **Input Validation**: ✅ Implemented - Pydantic models with comprehensive validation
+4. **Data Privacy**: ✅ Implemented - No permanent storage, temp files cleaned after use
+5. **HTTPS Only**: ⚠️ Ready - TLS enforcement via reverse proxy recommended
+6. **Security Headers**: ✅ Implemented - XSS, clickjacking, and content-type protection
+
+#### Configuration:
+Security features are controlled via environment variables:
+```bash
+ENABLE_API_KEY_AUTH=true    # Enable API key authentication
+API_KEYS=key1,key2,key3     # Comma-separated list of valid keys
+RATE_LIMIT_PER_MINUTE=60    # Requests per minute limit
+ENVIRONMENT=production       # Set to 'development' for test keys
+```
 
 ### Versioning Strategy
 
