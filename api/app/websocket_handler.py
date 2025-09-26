@@ -281,35 +281,69 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
         await websocket.close(code=4004, reason="Job not found")
         return
 
+    # Subscribe to Redis channel for this job
+    pubsub = manager.redis_client.pubsub()
+    redis_channel = f"job:{job_id}:logs"
+
     try:
         # Accept connection and add to manager
         await manager.connect(websocket, job_id)
 
-        # Keep connection alive and handle incoming messages
-        while True:
+        # Subscribe to Redis channel
+        await pubsub.subscribe(redis_channel)
+        logger.info(f"Subscribed to Redis channel: {redis_channel}")
+
+        # Create tasks for Redis listening and client message handling
+        async def listen_redis():
+            """Listen for messages from Redis and forward to WebSocket"""
             try:
-                # Wait for client messages (ping/pong, etc.)
-                data = await websocket.receive_text()
+                async for message in pubsub.listen():
+                    if message["type"] == "message":
+                        # Forward Redis message to WebSocket client
+                        await websocket.send_text(message["data"])
+            except Exception as e:
+                logger.error(f"Redis listener error for job {job_id}: {e}")
 
-                # Handle client messages if needed
-                try:
-                    client_message = json.loads(data)
-                    if client_message.get("type") == "ping":
-                        await manager.send_message(websocket, WebSocketMessage(
-                            type=MessageType.HEARTBEAT,
-                            job_id=job_id,
-                            data={"pong": True}
-                        ))
-                except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON from client: {data}")
+        async def listen_client():
+            """Listen for messages from WebSocket client"""
+            try:
+                while True:
+                    # Wait for client messages (ping/pong, etc.)
+                    data = await websocket.receive_text()
 
+                    # Handle client messages if needed
+                    try:
+                        client_message = json.loads(data)
+                        if client_message.get("type") == "ping":
+                            await manager.send_message(websocket, WebSocketMessage(
+                                type=MessageType.HEARTBEAT,
+                                job_id=job_id,
+                                data={"pong": True}
+                            ))
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON from client: {data}")
             except WebSocketDisconnect:
-                break
+                pass
             except Exception as e:
                 logger.error(f"WebSocket error for job {job_id}: {e}")
-                break
+
+        # Run both tasks concurrently
+        redis_task = asyncio.create_task(listen_redis())
+        client_task = asyncio.create_task(listen_client())
+
+        # Wait for either task to complete (disconnect or error)
+        done, pending = await asyncio.wait(
+            [redis_task, client_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        # Cancel pending tasks
+        for task in pending:
+            task.cancel()
 
     finally:
+        await pubsub.unsubscribe(redis_channel)
+        await pubsub.close()
         await manager.disconnect(websocket)
 
 

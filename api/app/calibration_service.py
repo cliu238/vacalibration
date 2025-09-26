@@ -314,36 +314,68 @@ input_file <- args[1]
 output_file <- args[2]
 job_id <- if(length(args) >= 3) args[3] else "unknown"
 
-# Progress reporting function
+# Progress reporting function with detailed logging
 report_progress <- function(progress, stage) {
-    cat(paste0("PROGRESS: ", progress, "% - ", stage, "\\n"))
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    cat(paste0("[", timestamp, "] PROGRESS: ", progress, "% - ", stage, "\\n"))
+    flush.console()
+}
+
+# Detailed logging function
+log_info <- function(message) {
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    cat(paste0("[", timestamp, "] INFO: ", message, "\\n"))
     flush.console()
 }
 
 tryCatch({
+    log_info("========== Starting Calibration Job ==========")
+    log_info(paste("Job ID:", job_id))
+    log_info(paste("Input file:", input_file))
+    log_info(paste("Output file:", output_file))
+    log_info(paste("R version:", R.version.string))
+    log_info(paste("vacalibration package version:", packageVersion("vacalibration")))
+
     report_progress(5, "Reading input data")
 
     # Read input
+    log_info("Reading JSON input file...")
     input_data <- fromJSON(input_file)
+    log_info(paste("Input data keys:", paste(names(input_data), collapse=", ")))
 
     report_progress(15, "Validating input parameters")
+    log_info(paste("Age group:", input_data$age_group))
+    log_info(paste("Country:", input_data$country))
+    log_info(paste("Mmat type:", input_data$mmat_type))
+    log_info(paste("Ensemble:", input_data$ensemble))
 
     # Process VA data
+    log_info("Processing VA data...")
     va_data <- list()
-    for (algo in names(input_data$va_data)) {
-        data_value <- input_data$va_data[[algo]]
+    algo_names <- names(input_data$va_data)
+    log_info(paste("Number of algorithms:", length(algo_names)))
+    log_info(paste("Algorithms:", paste(algo_names, collapse=", ")))
 
-        report_progress(25 + (match(algo, names(input_data$va_data)) - 1) * 10,
+    for (algo in algo_names) {
+        data_value <- input_data$va_data[[algo]]
+        log_info(paste("Processing algorithm:", algo))
+
+        report_progress(25 + (match(algo, algo_names) - 1) * 10,
                        paste("Processing", algo, "data"))
 
         if (is.character(data_value) && data_value == "use_example") {
             # Load example data
+            log_info(paste(algo, "- Using example data"))
             if (input_data$age_group == "neonate") {
                 report_progress(35, "Loading example neonate data")
+                log_info("Loading comsamoz_public_broad dataset for neonates...")
                 data(comsamoz_public_broad, envir = environment())
                 va_data[[algo]] <- comsamoz_public_broad$data
+                log_info(paste("Loaded neonate data: dimensions =",
+                              paste(dim(comsamoz_public_broad$data), collapse=" x ")))
             } else {
                 report_progress(35, "Creating synthetic child data")
+                log_info("Creating synthetic child data...")
                 # Create synthetic child data
                 n <- 100
                 child_causes <- c("malaria", "pneumonia", "diarrhea", "severe_malnutrition",
@@ -354,24 +386,48 @@ tryCatch({
                     mat[i, sample(1:length(child_causes), 1)] <- 1
                 }
                 va_data[[algo]] <- mat
+                log_info(paste("Created synthetic data: dimensions =",
+                              paste(dim(mat), collapse=" x ")))
             }
         } else if (is.list(data_value) && length(data_value) > 0 && !is.null(data_value[[1]]$cause)) {
             report_progress(40, paste("Converting specific causes for", algo))
+            log_info(paste(algo, "- Converting specific causes to broad causes"))
+            log_info(paste("Number of VA records:", length(data_value)))
+
             # Convert specific causes to broad causes
             df <- data.frame(
                 ID = sapply(data_value, function(x) as.character(ifelse(!is.null(x$ID), x$ID, x$id))),
                 cause = sapply(data_value, function(x) as.character(x$cause)),
                 stringsAsFactors = FALSE
             )
+            log_info(paste("Sample of causes (first 5):",
+                          paste(head(df$cause, 5), collapse=", ")))
+
             va_data[[algo]] <- cause_map(df = df, age_group = input_data$age_group)
+            log_info(paste("Converted data: dimensions =",
+                          paste(dim(va_data[[algo]]), collapse=" x ")))
         } else {
+            log_info(paste(algo, "- Using provided data directly"))
             va_data[[algo]] <- data_value
+            if (!is.null(dim(data_value))) {
+                log_info(paste("Data dimensions:", paste(dim(data_value), collapse=" x ")))
+            }
         }
     }
 
     report_progress(50, "Starting calibration")
+    log_info("========== Running vacalibration() ==========")
+    log_info(paste("Number of algorithms to calibrate:", length(va_data)))
+    log_info(paste("Age group:", input_data$age_group))
+    log_info(paste("Country:", input_data$country))
+    log_info(paste("Mmat type:", input_data$mmat_type))
+    log_info(paste("Ensemble:", input_data$ensemble))
+
+    start_time <- Sys.time()
+    log_info(paste("Calibration start time:", start_time))
 
     # Run calibration
+    log_info("Calling vacalibration::vacalibration()...")
     result <- vacalibration(
         va_data = va_data,
         age_group = input_data$age_group,
@@ -382,22 +438,38 @@ tryCatch({
         plot_it = FALSE
     )
 
+    end_time <- Sys.time()
+    duration <- as.numeric(difftime(end_time, start_time, units="secs"))
+    log_info(paste("Calibration completed in", round(duration, 2), "seconds"))
+
     report_progress(80, "Processing calibration results")
+    log_info("========== Processing Results ==========")
 
     # Prepare output
     output <- list(success = TRUE)
 
     # Add uncalibrated CSMF
     if (!is.null(result$p_uncalib)) {
+        log_info("Processing uncalibrated CSMF...")
+        log_info(paste("Uncalibrated causes:", length(result$p_uncalib)))
         output$uncalibrated <- as.list(result$p_uncalib)
+        log_info(paste("Cause names:", paste(names(result$p_uncalib), collapse=", ")))
+    } else {
+        log_info("WARNING: No uncalibrated results found")
     }
 
     report_progress(90, "Formatting output data")
 
     # Add calibrated results
     if (!is.null(result$pcalib_postsumm)) {
+        log_info("Processing calibrated results (posterior summary)...")
+        algo_list <- dimnames(result$pcalib_postsumm)[[1]]
+        log_info(paste("Number of calibrated algorithms:", length(algo_list)))
+        log_info(paste("Calibrated algorithms:", paste(algo_list, collapse=", ")))
+
         output$calibrated <- list()
-        for (algo in dimnames(result$pcalib_postsumm)[[1]]) {
+        for (algo in algo_list) {
+            log_info(paste("Extracting results for algorithm:", algo))
             output$calibrated[[algo]] <- list(
                 mean = as.list(result$pcalib_postsumm[algo, "postmean", ]),
                 lower_ci = as.list(result$pcalib_postsumm[algo, "lowcredI", ]),
@@ -406,27 +478,46 @@ tryCatch({
         }
     } else if (!is.null(result$p_calib)) {
         # Handle fixed case
+        log_info("Processing calibrated results (fixed case)...")
+        algo_list <- names(result$p_calib)
+        log_info(paste("Number of calibrated algorithms:", length(algo_list)))
+        log_info(paste("Calibrated algorithms:", paste(algo_list, collapse=", ")))
+
         output$calibrated <- list()
-        for (algo in names(result$p_calib)) {
+        for (algo in algo_list) {
+            log_info(paste("Extracting fixed results for algorithm:", algo))
             output$calibrated[[algo]] <- list(
                 mean = as.list(result$p_calib[[algo]]),
                 lower_ci = as.list(result$p_calib[[algo]]),
                 upper_ci = as.list(result$p_calib[[algo]])
             )
         }
+    } else {
+        log_info("WARNING: No calibrated results found")
     }
 
     report_progress(95, "Writing output file")
+    log_info(paste("Writing JSON output to:", output_file))
 
     # Write output
     write(toJSON(output, auto_unbox = TRUE, na = "null"), output_file)
+    log_info("Output file written successfully")
 
     report_progress(100, "Calibration completed")
+    log_info("========== Job Completed Successfully ==========")
 
 }, error = function(e) {
+    log_info("========== ERROR OCCURRED ==========")
+    log_info(paste("Error message:", e$message))
+    log_info(paste("Error call:", deparse(e$call)))
+
     error_output <- list(success = FALSE, error = as.character(e$message))
     write(toJSON(error_output, auto_unbox = TRUE), output_file)
-    cat(paste0("ERROR: ", e$message, "\\n"))
+
+    cat(paste0("ERROR: ", e$message, "\\n"), file=stderr())
+    cat(paste0("Error traceback:\\n"), file=stderr())
+    cat(paste0(capture.output(traceback()), collapse="\\n"), file=stderr())
+    log_info("========== Error details logged ==========")
 })
 '''
 
