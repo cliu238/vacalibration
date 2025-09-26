@@ -15,12 +15,25 @@ import json
 import tempfile
 import os
 
-# Import Celery job endpoints (unified job management)
+# Import async calibration components
+from .async_calibration import (
+    AsyncCalibrationRequest,
+    JobResponse,
+    JobStatusResponse,
+    JobListResponse,
+    JobOutputResponse,
+    start_async_calibration,
+    get_job_status,
+    list_calibration_jobs,
+    get_job_output,
+    cancel_job,
+    delete_calibration_job
+)
+
+# Import Celery job endpoints
 from .job_endpoints import (
     create_calibration_job as celery_create_job,
     list_celery_jobs_simple,
-    get_job_status as celery_get_job_status,
-    cancel_job as celery_cancel_job,
     CalibrationJobRequest
 )
 
@@ -393,10 +406,10 @@ async def create_calibration_job_endpoint(request: CalibrationJobRequest, backgr
     return await celery_create_job(request, background_tasks)
 
 
-@app.get("/jobs/{job_id}")
+@app.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_calibration_job_status(job_id: str):
     """Get status and results of a calibration job"""
-    return await celery_get_job_status(job_id)
+    return await get_job_status(job_id)
 
 
 @app.get("/jobs")
@@ -408,33 +421,25 @@ async def list_jobs(
     return await list_celery_jobs_simple(limit=limit, status=status)
 
 
-@app.get("/jobs/{job_id}/output")
+@app.get("/jobs/{job_id}/output", response_model=JobOutputResponse)
 async def get_calibration_job_output(
     job_id: str,
     start_line: int = Query(0, description="Starting line number for output")
 ):
     """Get R script output for streaming (useful for progress monitoring)"""
-    # Note: Output streaming not yet implemented in Celery version
-    # Return logs from job status instead
-    status = await celery_get_job_status(job_id, log_limit=100, log_offset=start_line)
-    return {
-        "job_id": job_id,
-        "logs": [log.message for log in status.logs],
-        "has_more": len(status.logs) >= 100
-    }
+    return await get_job_output(job_id, start_line=start_line)
 
 
-@app.post("/jobs/{job_id}/cancel")
+@app.post("/jobs/{job_id}/cancel", response_model=JobStatusResponse)
 async def cancel_calibration_job(job_id: str):
     """Cancel a running calibration job"""
-    return await celery_cancel_job(job_id)
+    return await cancel_job(job_id)
 
 
 @app.delete("/jobs/{job_id}")
 async def delete_job(job_id: str):
     """Delete a calibration job"""
-    # Note: Job deletion handled by Redis TTL expiry
-    raise HTTPException(status_code=501, detail="Job deletion not implemented - jobs expire automatically")
+    return await delete_calibration_job(job_id)
 
 
 # WebSocket-enhanced calibration endpoints
@@ -445,9 +450,18 @@ async def create_realtime_calibration(request: CalibrationRequest):
     if not request.async_:
         request.async_ = True
 
+    # Convert to async request
+    async_request = AsyncCalibrationRequest(
+        va_data=request.va_data,
+        age_group=request.age_group.value,
+        country=request.country,
+        mmat_type=request.mmat_type,
+        ensemble=request.ensemble
+    )
+
     # Create job using the enhanced calibration service
     calibration_service = get_calibration_service()
-    job_id = calibration_service.create_job(request.model_dump())
+    job_id = calibration_service.create_job(async_request.model_dump())
 
     # Start calibration in background
     import asyncio
