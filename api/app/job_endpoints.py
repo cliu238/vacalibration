@@ -668,10 +668,11 @@ async def create_calibration_job(request: CalibrationJobRequest, background_task
     # Submit to Celery with custom task ID
     request_data = request.model_dump()
     celery_app.send_task(
-        "api.app.job_endpoints.run_calibration_task",
+        "app.job_endpoints.run_calibration_task",
         args=[job_id, request_data],
         task_id=job_id,
-        priority=request.priority
+        priority=request.priority,
+        queue="calibration"
     )
 
     return {"job_id": job_id, "status": "created"}
@@ -709,10 +710,11 @@ async def create_batch_jobs(request: BatchCalibrationRequest) -> BatchJobRespons
         # Submit to Celery
         request_data = job_request.model_dump()
         celery_app.send_task(
-            "api.app.job_endpoints.run_calibration_task",
+            "app.job_endpoints.run_calibration_task",
             args=[job_id, request_data],
             task_id=job_id,
-            priority=job_request.priority
+            priority=job_request.priority,
+            queue="calibration"
         )
 
     # Store batch metadata
@@ -801,6 +803,88 @@ async def list_jobs(
         page_size=page_size,
         has_next=has_next
     )
+
+
+async def list_celery_jobs_simple(limit: int = 50, status: Optional[str] = None) -> Dict[str, Any]:
+    """List Celery jobs in simple format for frontend"""
+
+    # Get all job metadata keys
+    job_keys = redis_client.keys("job_metadata:*")
+    all_jobs = []
+
+    for key in job_keys:
+        metadata_data = redis_client.get(key)
+        if not metadata_data:
+            continue
+
+        try:
+            metadata = json.loads(metadata_data)
+            job_id = metadata.get("job_id")
+
+            # Get Celery task status
+            celery_result = AsyncResult(job_id, app=celery_app)
+
+            # Map Celery status to our status
+            if celery_result.state == "PENDING":
+                job_status = "pending"
+            elif celery_result.state == "STARTED":
+                job_status = "running"
+            elif celery_result.state == "SUCCESS":
+                job_status = "completed"
+            elif celery_result.state == "FAILURE":
+                job_status = "failed"
+            elif celery_result.state == "REVOKED":
+                job_status = "cancelled"
+            else:
+                job_status = "pending"
+
+            # Apply status filter if provided
+            if status and job_status != status:
+                continue
+
+            # Get progress
+            progress_data = redis_client.get(f"job_progress:{job_id}")
+            progress_percentage = 0
+            if progress_data:
+                progress_obj = json.loads(progress_data)
+                progress_percentage = progress_obj.get("progress_percentage", 0)
+
+            # Get request data for additional info
+            request_data = redis_client.get(f"job_request:{job_id}")
+            dataset = None
+            algorithm = None
+            if request_data:
+                request_obj = json.loads(request_data)
+                dataset = request_obj.get("dataset", "Unknown Dataset")
+                algorithm = request_obj.get("algorithm", "InSilicoVA")
+
+            # Build job object
+            job_obj = {
+                "job_id": job_id,
+                "status": job_status,
+                "progress": progress_percentage,
+                "created_at": metadata.get("created_at"),
+                "completed_at": metadata.get("completed_at"),
+                "algorithm": algorithm,
+                "dataset": dataset
+            }
+
+            # Add error if failed
+            if job_status == "failed" and celery_result.failed():
+                job_obj["error"] = str(celery_result.result) if celery_result.result else "Job failed"
+
+            all_jobs.append(job_obj)
+
+        except Exception as e:
+            continue  # Skip malformed metadata
+
+    # Sort by creation time (newest first)
+    all_jobs.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+    # Limit results
+    limited_jobs = all_jobs[:limit]
+
+    return {"jobs": limited_jobs, "total": len(limited_jobs)}
 
 
 async def cancel_job(job_id: str) -> Dict[str, str]:

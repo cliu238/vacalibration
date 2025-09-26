@@ -4,7 +4,7 @@ VA-Calibration API - Direct execution version
 Runs calibration immediately without job storage
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
 from typing import Dict, List, Optional, Union, Any
@@ -28,6 +28,13 @@ from .async_calibration import (
     get_job_output,
     cancel_job,
     delete_calibration_job
+)
+
+# Import Celery job endpoints
+from .job_endpoints import (
+    create_calibration_job as celery_create_job,
+    list_celery_jobs_simple,
+    CalibrationJobRequest
 )
 
 # Import WebSocket components
@@ -392,11 +399,11 @@ async def calibrate(request: CalibrationRequest):
         )
 
 
-# Async calibration endpoints
-@app.post("/jobs/calibrate", response_model=JobResponse)
-async def create_calibration_job(request: AsyncCalibrationRequest):
-    """Create a new async calibration job"""
-    return await start_async_calibration(request)
+# Async calibration endpoints (Celery-based with background workers)
+@app.post("/jobs/calibrate")
+async def create_calibration_job_endpoint(request: CalibrationJobRequest, background_tasks: BackgroundTasks):
+    """Create a new Celery-based calibration job with background workers"""
+    return await celery_create_job(request, background_tasks)
 
 
 @app.get("/jobs/{job_id}", response_model=JobStatusResponse)
@@ -405,13 +412,13 @@ async def get_calibration_job_status(job_id: str):
     return await get_job_status(job_id)
 
 
-@app.get("/jobs", response_model=JobListResponse)
+@app.get("/jobs")
 async def list_jobs(
     limit: int = Query(50, description="Maximum number of jobs to return"),
     status: Optional[str] = Query(None, description="Filter by job status")
 ):
     """List calibration jobs with optional filtering"""
-    return await list_calibration_jobs(limit=limit, status=status)
+    return await list_celery_jobs_simple(limit=limit, status=status)
 
 
 @app.get("/jobs/{job_id}/output", response_model=JobOutputResponse)

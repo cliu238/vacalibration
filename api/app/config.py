@@ -39,7 +39,7 @@ class CeleryConfig(BaseSettings):
 
     # Task routing and execution
     task_routes: dict = Field(default={
-        "api.app.job_endpoints.run_calibration_task": {"queue": "calibration"}
+        "app.job_endpoints.run_calibration_task": {"queue": "calibration"}
     })
 
     # Worker configuration
