@@ -853,10 +853,14 @@ async def list_celery_jobs_simple(limit: int = 50, status: Optional[str] = None)
             request_data = redis_client.get(f"job_request:{job_id}")
             dataset = None
             algorithm = None
+            age_group = None
+            country = None
             if request_data:
                 request_obj = json.loads(request_data)
                 dataset = request_obj.get("dataset", "Unknown Dataset")
                 algorithm = request_obj.get("algorithm", "InSilicoVA")
+                age_group = request_obj.get("age_group")
+                country = request_obj.get("country")
 
             # Build job object
             job_obj = {
@@ -866,7 +870,9 @@ async def list_celery_jobs_simple(limit: int = 50, status: Optional[str] = None)
                 "created_at": metadata.get("created_at"),
                 "completed_at": metadata.get("completed_at"),
                 "algorithm": algorithm,
-                "dataset": dataset
+                "dataset": dataset,
+                "age_group": age_group,
+                "country": country
             }
 
             # Add error if failed
