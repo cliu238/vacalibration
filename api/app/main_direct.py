@@ -41,6 +41,13 @@ from .validation import (
 # Import the router with batch endpoints
 from .router import router as api_router
 
+# Define JobResponse model for real-time endpoint
+class JobResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
+    created_at: str
+
 app = FastAPI(
     title="VA-Calibration API (Direct)",
     version="0.1.0",
@@ -222,24 +229,12 @@ class CalibrationRequest(BaseModel):
         alias="async"
     )
 
-    @validator('va_data', pre=True)
-    def handle_design_spec_params(cls, v, values):
-        """Convert design spec parameters to implementation parameters"""
-        data_source = values.get('data_source')
-        sample_dataset = values.get('sample_dataset')
-
-        # If using design spec parameters
-        if data_source == 'sample' and sample_dataset:
-            # Map sample dataset IDs to example data
-            dataset_mapping = {
-                'comsamoz_broad': 'use_example',
-                'comsamoz_specific': 'use_example',
-                # Add more mappings as needed
-            }
-            if sample_dataset in dataset_mapping:
-                return {"insilicova": dataset_mapping[sample_dataset]}
-
-        return v
+    # @validator('va_data', pre=True)
+    # def handle_design_spec_params(cls, v, values):
+    #     """Convert design spec parameters to implementation parameters"""
+    #     # DISABLED: Let R script handle sample dataset loading directly based on
+    #     # data_source and sample_dataset fields to avoid conflicts
+    #     return v
 
     model_config = {
         "json_schema_extra": {
