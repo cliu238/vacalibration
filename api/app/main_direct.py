@@ -21,6 +21,7 @@ from .job_endpoints import (
     list_celery_jobs_simple,
     get_job_status as celery_get_job_status,
     cancel_job as celery_cancel_job,
+    delete_job as celery_delete_job,
     CalibrationJobRequest
 )
 
@@ -428,8 +429,7 @@ async def cancel_calibration_job(job_id: str):
 @app.delete("/jobs/{job_id}")
 async def delete_job(job_id: str):
     """Delete a calibration job"""
-    # Note: Job deletion handled by Redis TTL expiry
-    raise HTTPException(status_code=501, detail="Job deletion not implemented - jobs expire automatically")
+    return await celery_delete_job(job_id)
 
 
 # WebSocket-enhanced calibration endpoints

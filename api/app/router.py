@@ -33,7 +33,9 @@ from .job_endpoints import (
     get_job_result,
     get_batch_status,
     get_cache_statistics,
-    clear_cache
+    clear_cache,
+    delete_job,
+    delete_all_jobs
 )
 
 # Create router with comprehensive job management
@@ -460,6 +462,63 @@ async def retry_failed_job(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retry job: {str(e)}")
+
+
+# Job Deletion Endpoints
+@router.delete(
+    "/jobs/{job_id}",
+    summary="Delete Job",
+    description="Delete a job and all its associated data from Redis"
+)
+async def delete_job_endpoint(job_id: str):
+    """
+    Delete a job and all its associated data.
+
+    **Features:**
+    - Terminates running jobs
+    - Removes all Redis keys (metadata, logs, results)
+    - Cannot be undone
+
+    **Warning:** This action permanently deletes the job
+    """
+    try:
+        return await delete_job(job_id)
+    except Exception as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        raise HTTPException(status_code=500, detail=f"Failed to delete job: {str(e)}")
+
+
+@router.delete(
+    "/jobs/clear/all",
+    summary="Delete All Jobs",
+    description="Delete multiple jobs with optional filtering"
+)
+async def delete_all_jobs_endpoint(
+    status: Optional[JobStatus] = Query(None, description="Filter by job status"),
+    age_group: Optional[AgeGroup] = Query(None, description="Filter by age group"),
+    confirm: bool = Query(False, description="Confirmation flag required for deletion")
+):
+    """
+    Delete all jobs matching the specified filters.
+
+    **Features:**
+    - Optional filtering by status and age group
+    - Bulk deletion with progress tracking
+    - Confirmation requirement for safety
+
+    **Warning:** This action cannot be undone
+    """
+    if not confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Job deletion requires explicit confirmation (set confirm=true)"
+        )
+
+    try:
+        return await delete_all_jobs(status, age_group)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete jobs: {str(e)}")
 
 
 # Export router for integration with main FastAPI app

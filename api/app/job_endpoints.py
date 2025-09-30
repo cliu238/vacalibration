@@ -1045,6 +1045,93 @@ def _map_celery_status(celery_state: str) -> JobStatus:
     return mapping.get(celery_state, JobStatus.PENDING)
 
 
+async def delete_job(job_id: str) -> Dict[str, str]:
+    """Delete a job and all its associated data from Redis"""
+
+    # Check if job exists
+    metadata = get_job_metadata(job_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    # Revoke Celery task if still running
+    celery_result = AsyncResult(job_id, app=celery_app)
+    if celery_result.state in ["PENDING", "STARTED"]:
+        celery_app.control.revoke(job_id, terminate=True)
+
+    # Delete all Redis keys associated with this job
+    keys_to_delete = [
+        f"job_metadata:{job_id}",
+        f"job_request:{job_id}",
+        f"job_progress:{job_id}",
+        f"job_logs:{job_id}",
+        f"job_result:{job_id}"
+    ]
+
+    deleted_count = 0
+    for key in keys_to_delete:
+        if redis_client.delete(key):
+            deleted_count += 1
+
+    log_job_event(job_id, LogLevel.INFO, "Job deleted by user", "api")
+
+    return {
+        "job_id": job_id,
+        "status": "deleted",
+        "deleted_keys": deleted_count
+    }
+
+
+async def delete_all_jobs(status_filter: Optional[JobStatus] = None, age_group_filter: Optional[AgeGroup] = None) -> Dict[str, Any]:
+    """Delete multiple jobs based on filters"""
+
+    # Get all job metadata keys
+    job_keys = redis_client.keys("job_metadata:*")
+    deleted_jobs = []
+    failed_jobs = []
+
+    for key in job_keys:
+        metadata_data = redis_client.get(key)
+        if not metadata_data:
+            continue
+
+        try:
+            metadata = JobMetadata.model_validate_json(metadata_data)
+            job_id = metadata.job_id
+
+            # Apply filters
+            should_delete = True
+
+            if status_filter:
+                celery_result = AsyncResult(job_id, app=celery_app)
+                job_status = _map_celery_status(celery_result.state)
+                if job_status != status_filter:
+                    should_delete = False
+
+            if age_group_filter:
+                request_data = redis_client.get(f"job_request:{job_id}")
+                if request_data:
+                    request_obj = json.loads(request_data)
+                    if request_obj.get("age_group") != age_group_filter.value:
+                        should_delete = False
+
+            if should_delete:
+                try:
+                    await delete_job(job_id)
+                    deleted_jobs.append(job_id)
+                except Exception as e:
+                    failed_jobs.append({"job_id": job_id, "error": str(e)})
+
+        except Exception as e:
+            continue
+
+    return {
+        "deleted_count": len(deleted_jobs),
+        "failed_count": len(failed_jobs),
+        "deleted_jobs": deleted_jobs,
+        "failed_jobs": failed_jobs if failed_jobs else None
+    }
+
+
 # FastAPI router setup would go here - these functions would be decorated with @router.get, @router.post, etc.
 # Example:
 # from fastapi import APIRouter
