@@ -72,7 +72,6 @@ services:
   - type: web
     name: va-calibration-frontend
     runtime: static
-    plan: free
     branch: main
     rootDir: mock-to-real
     buildCommand: "npm install && npm run build"
