@@ -4,6 +4,25 @@
 
 echo "Starting VA-Calibration Worker Service..."
 
+# Verify environment variables are set
+echo "Checking environment variables..."
+if [ -z "$CELERY_BROKER_URL" ]; then
+    echo "ERROR: CELERY_BROKER_URL not set"
+else
+    echo "CELERY_BROKER_URL: ${CELERY_BROKER_URL:0:20}..."
+fi
+
+if [ -z "$CELERY_RESULT_BACKEND" ]; then
+    echo "ERROR: CELERY_RESULT_BACKEND not set"
+else
+    echo "CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:0:20}..."
+fi
+
+# Explicitly export environment variables for child processes
+export CELERY_BROKER_URL
+export CELERY_RESULT_BACKEND
+export REDIS_URL
+
 # Start health check server in background
 echo "Starting health check server on port $PORT..."
 poetry run python -m app.worker_health &
@@ -12,10 +31,14 @@ HEALTH_PID=$!
 # Give health server time to start
 sleep 2
 
-# Start Celery worker
+# Start Celery worker with verbose logging
 echo "Starting Celery worker..."
 poetry run celery -A app.job_endpoints.celery_app worker --loglevel=info --pool=solo &
 CELERY_PID=$!
+
+echo "Worker processes started:"
+echo "  Health server PID: $HEALTH_PID"
+echo "  Celery worker PID: $CELERY_PID"
 
 # Function to cleanup on exit
 cleanup() {
