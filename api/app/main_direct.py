@@ -308,6 +308,35 @@ async def root():
     }
 
 
+@app.get("/debug/redis")
+async def debug_redis():
+    """Debug endpoint to check Redis connection"""
+    import os
+    redis_url = os.getenv("REDIS_URL", "Not set")
+    redis_host = os.getenv("REDIS_HOST", "Not set")
+    redis_port = os.getenv("REDIS_PORT", "Not set")
+
+    # Try to connect to Redis
+    from app.job_endpoints import redis_client
+    redis_status = "unknown"
+    redis_error = None
+    try:
+        redis_client.ping()
+        redis_status = "connected"
+    except Exception as e:
+        redis_status = "failed"
+        redis_error = str(e)
+
+    return {
+        "redis_url_set": redis_url != "Not set",
+        "redis_url_prefix": redis_url[:20] if redis_url != "Not set" else "Not set",
+        "redis_host": redis_host,
+        "redis_port": redis_port,
+        "redis_status": redis_status,
+        "redis_error": redis_error
+    }
+
+
 @app.post("/calibrate")
 async def calibrate(request: CalibrationRequest):
     """Run calibration directly or asynchronously based on async parameter"""
