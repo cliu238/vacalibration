@@ -1,10 +1,3 @@
-# Redis Database (must be defined first)
-databases:
-  - name: va-calibration-redis
-    region: oregon
-    plan: free
-    ipAllowList: []
-
 services:
   # FastAPI Backend
   - type: web
@@ -20,25 +13,15 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.0"
       - key: REDIS_URL
-        fromDatabase:
-          name: va-calibration-redis
-          property: connectionString
+        sync: false
       - key: REDIS_HOST
-        fromDatabase:
-          name: va-calibration-redis
-          property: host
+        sync: false
       - key: REDIS_PORT
-        fromDatabase:
-          name: va-calibration-redis
-          property: port
+        sync: false
       - key: CELERY_BROKER_URL
-        fromDatabase:
-          name: va-calibration-redis
-          property: connectionString
+        sync: false
       - key: CELERY_RESULT_BACKEND
-        fromDatabase:
-          name: va-calibration-redis
-          property: connectionString
+        sync: false
     healthCheckPath: /
 
   # Celery Worker (deployed as web service for free tier compatibility)
@@ -56,17 +39,11 @@ services:
       - key: PYTHON_VERSION
         value: "3.12.0"
       - key: REDIS_URL
-        fromDatabase:
-          name: va-calibration-redis
-          property: connectionString
+        sync: false
       - key: CELERY_BROKER_URL
-        fromDatabase:
-          name: va-calibration-redis
-          property: connectionString
+        sync: false
       - key: CELERY_RESULT_BACKEND
-        fromDatabase:
-          name: va-calibration-redis
-          property: connectionString
+        sync: false
 
   # React Frontend (Static Site)
   - type: web
