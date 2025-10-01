@@ -1,0 +1,13 @@
+{
+  "age_group": "neonate",
+  "country": "Mozambique",
+  "dataset": "comsamoz_broad",
+  "deaths": {
+    "congenital_malformation": 1,
+    "pneumonia": 124,
+    "sepsis_meningitis_inf": 305,
+    "ipre": 275,
+    "other": 52,
+    "prematurity": 243
+  }
+}
