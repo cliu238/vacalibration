@@ -54,11 +54,22 @@ else:
     )
 
 # Initialize Celery for background job processing
+broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
+backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+
 celery_app = Celery(
     "vacalibration",
-    broker=os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1"),
-    backend=os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+    broker=broker_url,
+    backend=backend_url
 )
+
+# Configure SSL for Celery if using rediss://
+if broker_url.startswith("rediss://") or backend_url.startswith("rediss://"):
+    import ssl
+    celery_app.conf.update(
+        broker_use_ssl={'ssl_cert_reqs': ssl.CERT_NONE},
+        redis_backend_use_ssl={'ssl_cert_reqs': ssl.CERT_NONE}
+    )
 
 # Constants
 CACHE_TTL = int(os.getenv("CACHE_TTL", 3600))  # 1 hour default
