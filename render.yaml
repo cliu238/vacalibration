@@ -1,3 +1,10 @@
+# Redis Database (must be defined first)
+databases:
+  - name: va-calibration-redis
+    region: oregon
+    plan: free
+    ipAllowList: []
+
 services:
   # FastAPI Backend
   - type: web
@@ -84,10 +91,3 @@ services:
           type: web
           name: va-calibration-api
           property: host
-
-# Redis Database
-databases:
-  - name: va-calibration-redis
-    region: oregon
-    plan: free
-    ipAllowList: []
