@@ -32,13 +32,19 @@ logger = logging.getLogger(__name__)
 # Fall back to REDIS_HOST/PORT for local development
 redis_url = os.getenv("REDIS_URL")
 if redis_url:
-    # For Upstash and other SSL Redis, skip SSL cert verification
-    import ssl
-    redis_client = redis.from_url(
-        redis_url,
-        decode_responses=True,
-        ssl_cert_reqs=ssl.CERT_NONE if redis_url.startswith("rediss://") else None
-    )
+    # For SSL Redis connections (rediss://), handle SSL certificate requirements
+    if redis_url.startswith("rediss://"):
+        import ssl
+        redis_client = redis.from_url(
+            redis_url,
+            decode_responses=True,
+            ssl_cert_reqs=ssl.CERT_NONE
+        )
+    else:
+        redis_client = redis.from_url(
+            redis_url,
+            decode_responses=True
+        )
 else:
     redis_client = redis.Redis(
         host=os.getenv("REDIS_HOST", "localhost"),
