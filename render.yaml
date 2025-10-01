@@ -68,10 +68,9 @@ services:
           name: va-calibration-redis
           property: connectionString
 
-  # React Frontend
-  - type: web
+  # React Frontend (Static Site)
+  - type: static
     name: va-calibration-frontend
-    runtime: node
     region: oregon
     plan: free
     branch: main
