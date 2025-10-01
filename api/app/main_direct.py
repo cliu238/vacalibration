@@ -320,9 +320,21 @@ async def debug_redis():
     from app.job_endpoints import redis_client
     redis_status = "unknown"
     redis_error = None
+    redis_operations = {}
+
     try:
         redis_client.ping()
         redis_status = "connected"
+
+        # Test Redis operations
+        try:
+            redis_client.set("test_key", "test_value", ex=10)
+            test_value = redis_client.get("test_key")
+            redis_operations["set_get"] = "success" if test_value == "test_value" else "failed"
+            redis_client.delete("test_key")
+        except Exception as e:
+            redis_operations["set_get"] = f"failed: {str(e)}"
+
     except Exception as e:
         redis_status = "failed"
         redis_error = str(e)
@@ -333,8 +345,116 @@ async def debug_redis():
         "redis_host": redis_host,
         "redis_port": redis_port,
         "redis_status": redis_status,
-        "redis_error": redis_error
+        "redis_error": redis_error,
+        "redis_operations": redis_operations
     }
+
+
+@app.get("/debug/celery")
+async def debug_celery():
+    """Debug endpoint to check Celery connection"""
+    import os
+    from app.job_endpoints import celery_app
+
+    celery_broker = os.getenv("CELERY_BROKER_URL", "Not set")
+    celery_backend = os.getenv("CELERY_RESULT_BACKEND", "Not set")
+
+    # Try to inspect Celery
+    celery_status = "unknown"
+    celery_error = None
+    active_workers = []
+
+    try:
+        # Get active workers
+        inspect = celery_app.control.inspect()
+        stats = inspect.stats()
+        if stats:
+            active_workers = list(stats.keys())
+            celery_status = "connected"
+        else:
+            celery_status = "no_workers"
+    except Exception as e:
+        celery_status = "failed"
+        celery_error = str(e)
+
+    return {
+        "celery_broker_set": celery_broker != "Not set",
+        "celery_broker_prefix": celery_broker[:20] if celery_broker != "Not set" else "Not set",
+        "celery_backend_set": celery_backend != "Not set",
+        "celery_status": celery_status,
+        "celery_error": celery_error,
+        "active_workers": active_workers,
+        "worker_count": len(active_workers)
+    }
+
+
+@app.post("/debug/test-job")
+async def debug_test_job():
+    """Debug endpoint to test job creation step by step"""
+    import traceback
+    from app.job_endpoints import (
+        generate_job_id,
+        JobMetadata,
+        store_job_metadata,
+        redis_client,
+        celery_app,
+        CACHE_TTL
+    )
+    from datetime import datetime, timedelta
+
+    results = {
+        "steps": {},
+        "success": False,
+        "error": None
+    }
+
+    try:
+        # Step 1: Generate job ID
+        job_id = generate_job_id()
+        results["steps"]["generate_job_id"] = {"success": True, "job_id": job_id}
+
+        # Step 2: Create metadata
+        timeout_at = datetime.utcnow() + timedelta(minutes=30)
+        metadata = JobMetadata(
+            job_id=job_id,
+            job_type="test_calibration",
+            created_at=datetime.utcnow(),
+            timeout_at=timeout_at,
+            priority=5
+        )
+        results["steps"]["create_metadata"] = {"success": True}
+
+        # Step 3: Store metadata in Redis
+        store_job_metadata(job_id, metadata)
+        results["steps"]["store_metadata"] = {"success": True}
+
+        # Step 4: Store test request data in Redis
+        test_request = {"age_group": "neonate", "country": "test"}
+        redis_client.set(f"job_request:{job_id}", str(test_request), ex=CACHE_TTL * 24)
+        results["steps"]["store_request"] = {"success": True}
+
+        # Step 5: Test Celery task submission
+        task_result = celery_app.send_task(
+            "app.job_endpoints.run_calibration_task",
+            args=[job_id, test_request],
+            task_id=job_id,
+            priority=5,
+            queue="calibration"
+        )
+        results["steps"]["celery_task"] = {
+            "success": True,
+            "task_id": task_result.id,
+            "state": task_result.state
+        }
+
+        results["success"] = True
+        results["test_job_id"] = job_id
+
+    except Exception as e:
+        results["error"] = str(e)
+        results["traceback"] = traceback.format_exc()
+
+    return results
 
 
 @app.post("/calibrate")
@@ -415,7 +535,17 @@ async def calibrate(request: CalibrationRequest):
 @app.post("/jobs/calibrate")
 async def create_calibration_job_endpoint(request: CalibrationJobRequest, background_tasks: BackgroundTasks):
     """Create a new Celery-based calibration job with background workers"""
-    return await celery_create_job(request, background_tasks)
+    try:
+        return await celery_create_job(request, background_tasks)
+    except Exception as e:
+        import traceback
+        error_detail = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+            "request_data": request.model_dump() if hasattr(request, 'model_dump') else str(request)
+        }
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get("/jobs/{job_id}")
