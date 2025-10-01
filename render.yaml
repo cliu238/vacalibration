@@ -71,7 +71,7 @@ services:
   # React Frontend (Static Site)
   - type: web
     name: va-calibration-frontend
-    env: static
+    runtime: static
     region: oregon
     plan: free
     branch: main
