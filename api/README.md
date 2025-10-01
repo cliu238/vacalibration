@@ -60,6 +60,181 @@ poetry run uvicorn app.main_direct:app --reload
 # API docs at http://localhost:8000/docs
 ```
 
+## 💻 Local Development Setup
+
+### Prerequisites Check
+```bash
+# 1. Check Python version (3.12+ required)
+python3 --version
+
+# 2. Check R installation (4.0+ required)
+R --version
+
+# 3. Check Redis installation
+redis-cli ping
+# Should return: PONG
+
+# 4. Check Poetry installation
+poetry --version
+```
+
+### Quick Start Script (Easiest Method)
+
+For the fastest setup, use the provided start script:
+
+```bash
+cd api
+./start_local.sh
+```
+
+This script will:
+1. Check all prerequisites (Python, R, Redis, Poetry)
+2. Install dependencies
+3. Start Redis if not running
+4. Start API server on http://localhost:8000
+5. Start Celery worker
+6. Display service URLs and process IDs
+
+To stop all services:
+```bash
+pkill -f uvicorn && pkill -f celery
+```
+
+### Step-by-Step Local Setup (Manual Method)
+
+#### 1. Install Dependencies
+```bash
+# Navigate to API directory
+cd /path/to/vacalibration/api
+
+# Install Python dependencies with Poetry
+poetry install
+
+# Install R packages (if not already installed)
+Rscript -e "install.packages(c('rstan', 'LaplacesDemon', 'reshape2', 'MASS', 'jsonlite'), repos='https://cloud.r-project.org/')"
+```
+
+#### 2. Start Redis Server
+```bash
+# Start Redis in a new terminal
+redis-server
+
+# Or start in background
+redis-server &
+
+# Verify Redis is running
+redis-cli ping
+```
+
+#### 3. Set Environment Variables
+```bash
+# For local development, set these environment variables:
+export REDIS_URL=redis://localhost:6379/0
+export CELERY_BROKER_URL=redis://localhost:6379/1
+export CELERY_RESULT_BACKEND=redis://localhost:6379/2
+```
+
+#### 4. Start Backend API Server
+```bash
+# Terminal 1: Start FastAPI backend
+cd api
+REDIS_URL=redis://localhost:6379/0 \
+CELERY_BROKER_URL=redis://localhost:6379/1 \
+CELERY_RESULT_BACKEND=redis://localhost:6379/2 \
+poetry run uvicorn app.main_direct:app --host 0.0.0.0 --port 8000 --reload
+
+# API will be available at: http://localhost:8000
+# Interactive docs at: http://localhost:8000/docs
+```
+
+#### 5. Start Celery Worker
+```bash
+# Terminal 2: Start Celery worker for background jobs
+cd api
+REDIS_URL=redis://localhost:6379/0 \
+CELERY_BROKER_URL=redis://localhost:6379/1 \
+CELERY_RESULT_BACKEND=redis://localhost:6379/2 \
+poetry run celery -A app.job_endpoints.celery_app worker \
+  --loglevel=info \
+  --pool=solo \
+  --queues=calibration
+```
+
+#### 6. Start Frontend (Optional)
+```bash
+# Terminal 3: Start frontend development server
+cd mock-to-real
+npm install  # First time only
+npm run dev
+
+# Frontend will be available at: http://localhost:8081
+```
+
+### Verify Installation
+
+#### Test API Health
+```bash
+# Check API is running
+curl http://localhost:8000/
+# Expected: {"status":"healthy","service":"VA-Calibration API (Direct)","r_status":"R ready"}
+
+# Check Celery worker connectivity
+curl http://localhost:8000/debug/celery
+# Expected: {"celery_status":"connected","worker_count":1}
+```
+
+#### Test End-to-End Calibration
+```bash
+# Create a test job
+curl -X POST 'http://localhost:8000/jobs/calibrate' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "age_group": "neonate",
+    "country": "Mozambique",
+    "dataset": "comsamoz_broad",
+    "deaths": {
+      "congenital_malformation": 1,
+      "pneumonia": 124,
+      "sepsis_meningitis_inf": 305,
+      "ipre": 275,
+      "other": 52,
+      "prematurity": 243
+    }
+  }'
+
+# Response will include job_id, e.g., {"job_id": "job_abc123", "status": "created"}
+
+# Check job status (replace JOB_ID with actual ID from response)
+curl http://localhost:8000/jobs/JOB_ID
+
+# Get full results once completed
+curl http://localhost:8000/api/v1/calibrate/JOB_ID/result
+```
+
+#### Test WebSocket Real-Time Logs
+```bash
+# Run WebSocket test script
+cd api
+poetry run python test_ws_logs.py
+
+# Expected: Real-time log streaming with 20+ messages showing calibration progress
+```
+
+### Running Services Summary
+
+| Service | Terminal | Command | URL |
+|---------|----------|---------|-----|
+| **Redis** | Terminal 1 | `redis-server` | `localhost:6379` |
+| **FastAPI API** | Terminal 2 | `poetry run uvicorn app.main_direct:app --host 0.0.0.0 --port 8000 --reload` | http://localhost:8000 |
+| **Celery Worker** | Terminal 3 | `poetry run celery -A app.job_endpoints.celery_app worker --loglevel=info --pool=solo --queues=calibration` | N/A (background) |
+| **Frontend** | Terminal 4 | `npm run dev` (from mock-to-real/) | http://localhost:8081 |
+
+### Expected Performance (Local)
+- **Health check**: < 100ms
+- **Small calibration job** (< 1000 deaths): 5-10 seconds
+- **WebSocket connection**: < 500ms
+- **Job queue processing**: < 1 second pickup time
+
 ### Docker Deployment
 ```bash
 # Use Docker Compose for complete setup
@@ -285,6 +460,25 @@ redis-cli ping
 
 # Start Redis if not running
 redis-server
+
+# If port 6379 is in use, find and kill the process
+lsof -i :6379
+kill <PID>
+```
+
+#### Port Already in Use
+```bash
+# Find what's using port 8000 (API)
+lsof -i :8000
+kill <PID>
+
+# Find what's using port 8081 (Frontend)
+lsof -i :8081
+kill <PID>
+
+# Or use pkill to kill all processes
+pkill -f uvicorn  # Kill API servers
+pkill -f celery   # Kill Celery workers
 ```
 
 #### R Package Missing
@@ -292,17 +486,119 @@ redis-server
 # Check R packages
 Rscript -e "library(vacalibration)"
 
-# Reinstall if needed
+# If missing, install R dependencies first
+Rscript -e "install.packages(c('rstan', 'LaplacesDemon', 'reshape2', 'MASS', 'jsonlite'), repos='https://cloud.r-project.org/')"
+
+# Then install vacalibration (if using local package)
+# Or from GitHub:
 Rscript -e "devtools::install_github('CHAMPS-project/vacalibration')"
 ```
 
-#### Celery Worker Not Processing
+#### Celery Worker Not Processing Jobs
 ```bash
-# Check worker status
-celery -A app.celery_app inspect active
+# 1. Check worker status via API
+curl http://localhost:8000/debug/celery
+# Should show: "celery_status": "connected", "worker_count": 1
 
-# Restart worker
-poetry run celery -A app.celery_app worker --loglevel=info
+# 2. Verify worker is listening to correct queue
+# Worker should show: .> calibration  exchange=calibration(direct)
+
+# 3. Check Redis connectivity
+redis-cli -n 1 ping  # Celery broker (DB 1)
+redis-cli -n 2 ping  # Celery results (DB 2)
+
+# 4. Check if jobs are in queue
+redis-cli -n 1 keys "celery*"
+
+# 5. Restart worker with correct queue
+cd api
+REDIS_URL=redis://localhost:6379/0 \
+CELERY_BROKER_URL=redis://localhost:6379/1 \
+CELERY_RESULT_BACKEND=redis://localhost:6379/2 \
+poetry run celery -A app.job_endpoints.celery_app worker \
+  --loglevel=info \
+  --pool=solo \
+  --queues=calibration
+```
+
+#### Jobs Stuck in "pending" Status
+```bash
+# This usually means worker isn't picking up jobs from the queue
+
+# 1. Verify worker is running and connected
+curl http://localhost:8000/debug/celery
+
+# 2. Check worker logs for errors
+# Look in the terminal where you started the Celery worker
+
+# 3. Verify queue name matches
+# Jobs are sent to "calibration" queue
+# Worker must listen to "calibration" queue (--queues=calibration flag)
+
+# 4. Restart both API and worker
+pkill -f uvicorn
+pkill -f celery
+# Then start them again with correct environment variables
+```
+
+#### WebSocket Connection Refused
+```bash
+# 1. Check API server is running
+curl http://localhost:8000/
+
+# 2. Check WebSocket endpoint exists
+curl http://localhost:8000/websocket/stats
+
+# 3. Test with WebSocket script
+cd api
+poetry run python test_ws_logs.py
+
+# 4. Check firewall isn't blocking WebSocket connections
+```
+
+#### Frontend Can't Connect to API (CORS Error)
+```bash
+# 1. Verify API is running
+curl http://localhost:8000/
+
+# 2. Check CORS settings in API
+# API should allow localhost:8081 origin
+
+# 3. Check API configuration allows all local origins
+# In app/main_direct.py, CORSMiddleware should include:
+#   allow_origins=["http://localhost:8081", "http://localhost:5173"]
+```
+
+#### R Script Execution Fails
+```bash
+# 1. Check R is installed and in PATH
+which R
+R --version
+
+# 2. Test R can load required packages
+Rscript -e "library(vacalibration); library(jsonlite)"
+
+# 3. Check data files exist
+ls -la data/comsamoz_broad.rda
+ls -la data/comsamoz_openVA.rda
+
+# 4. Run R script manually to see detailed errors
+cd api
+Rscript --version
+```
+
+#### Poetry Environment Issues
+```bash
+# Recreate virtual environment
+cd api
+poetry env remove python
+poetry install
+
+# Verify Poetry is using correct Python version
+poetry env info
+
+# Activate environment manually
+poetry shell
 ```
 
 ## 📚 Documentation
