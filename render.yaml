@@ -41,8 +41,8 @@ services:
           property: connectionString
     healthCheckPath: /
 
-  # Celery Worker for Background Jobs
-  - type: worker
+  # Celery Worker (deployed as web service for free tier compatibility)
+  - type: web
     name: va-calibration-worker
     runtime: python
     region: oregon
@@ -50,7 +50,8 @@ services:
     branch: main
     rootDir: api
     buildCommand: "pip install poetry && poetry install --without dev"
-    startCommand: "poetry run celery -A app.job_endpoints.celery_app worker --loglevel=info --pool=solo"
+    startCommand: "bash start_worker.sh"
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
