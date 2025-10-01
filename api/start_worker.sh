@@ -31,9 +31,9 @@ HEALTH_PID=$!
 # Give health server time to start
 sleep 2
 
-# Start Celery worker with verbose logging
+# Start Celery worker with verbose logging and calibration queue
 echo "Starting Celery worker..."
-poetry run celery -A app.job_endpoints.celery_app worker --loglevel=info --pool=solo &
+poetry run celery -A app.job_endpoints.celery_app worker --loglevel=info --pool=solo --queues=calibration &
 CELERY_PID=$!
 
 echo "Worker processes started:"
