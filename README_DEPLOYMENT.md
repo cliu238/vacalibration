@@ -31,13 +31,49 @@ This project is configured for deployment on Render.com's free tier with Upstash
 #### 1. Set Up Upstash Redis
 
 ```bash
-# Create Upstash account at https://upstash.com
-# Create a new Redis database
-# Copy the Redis URL - it should look like:
-# rediss://default:YOUR_PASSWORD@YOUR_DATABASE.upstash.io:6379
+# 1. Create Upstash account at https://upstash.com
+# 2. Create a new Redis database (free tier available)
+# 3. Copy the connection details from the Upstash dashboard:
+
+# Redis URL (for Celery):
+rediss://default:YOUR_PASSWORD@YOUR_DATABASE.upstash.io:6379
+
+# REST URL (for alternative access):
+https://YOUR_DATABASE.upstash.io
+
+# REST Token (for REST API access):
+YOUR_PASSWORD
 ```
 
 **Important**: Use the `rediss://` URL (with SSL), NOT `redis://`
+
+**Testing Your Upstash Connection:**
+```bash
+# Test via redis-cli (with TLS):
+redis-cli --tls -u redis://default:YOUR_PASSWORD@YOUR_DATABASE.upstash.io:6379
+
+# Once connected, try:
+# > ping
+# PONG
+# > set test "hello"
+# OK
+# > get test
+# "hello"
+```
+
+**Upstash REST API (Alternative):**
+```bash
+# Set environment variables for REST access:
+export UPSTASH_REDIS_REST_URL="https://YOUR_DATABASE.upstash.io"
+export UPSTASH_REDIS_REST_TOKEN="YOUR_PASSWORD"
+
+# Test REST API:
+curl -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  "$UPSTASH_REDIS_REST_URL/ping"
+
+# Expected response:
+# {"result":"PONG"}
+```
 
 #### 2. Deploy to Render via Blueprint
 
@@ -299,10 +335,18 @@ ValueError: A rediss:// URL must have parameter ssl_cert_reqs
 ### Local Development
 
 ```bash
-# Start Upstash Redis connection locally
+# Set up Upstash Redis connection locally
 export REDIS_URL="rediss://default:YOUR_PASSWORD@YOUR_DATABASE.upstash.io:6379"
 export CELERY_BROKER_URL="$REDIS_URL"
 export CELERY_RESULT_BACKEND="$REDIS_URL"
+
+# Optional: REST API credentials (if needed)
+export UPSTASH_REDIS_REST_URL="https://YOUR_DATABASE.upstash.io"
+export UPSTASH_REDIS_REST_TOKEN="YOUR_PASSWORD"
+
+# Test Upstash connection
+redis-cli --tls -u redis://default:YOUR_PASSWORD@YOUR_DATABASE.upstash.io:6379 ping
+# Expected: PONG
 
 # Backend API
 cd api
@@ -321,6 +365,20 @@ cd mock-to-real
 npm install
 export VITE_API_BASE_URL=http://localhost:8000
 npm run dev
+```
+
+**Verify Local Setup:**
+```bash
+# Check API is running
+curl http://localhost:8000/
+
+# Check Celery worker connectivity
+curl http://localhost:8000/debug/celery
+
+# Create a test job
+curl -X POST 'http://localhost:8000/jobs/calibrate' \
+  -H 'Content-Type: application/json' \
+  -d '{"age_group": "neonate", "country": "Mozambique"}'
 ```
 
 ### Production Checklist
@@ -361,7 +419,147 @@ Before going to production:
 ```bash
 # ✅ CORRECT (SSL with rediss://)
 REDIS_URL=rediss://default:password@host.upstash.io:6379
+CELERY_BROKER_URL=rediss://default:password@host.upstash.io:6379
+CELERY_RESULT_BACKEND=rediss://default:password@host.upstash.io:6379
 
 # ❌ WRONG (no SSL with redis://)
 REDIS_URL=redis://default:password@host.upstash.io:6379
+
+# Optional: REST API access (alternative to Redis protocol)
+UPSTASH_REDIS_REST_URL=https://host.upstash.io
+UPSTASH_REDIS_REST_TOKEN=password
 ```
+
+**Example with Real Values:**
+```bash
+# Redis Protocol (for Celery - PRIMARY):
+REDIS_URL=rediss://default:AUFcAAIncDIyZTFhMzk3ODE1MzM0MWMzOTI2YjBiZjkwNzU4NzcxOXAyMTY3MzI@winning-barnacle-16732.upstash.io:6379
+
+# REST API (alternative access - OPTIONAL):
+UPSTASH_REDIS_REST_URL=https://winning-barnacle-16732.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AUFcAAIncDIyZTFhMzk3ODE1MzM0MWMzOTI2YjBiZjkwNzU4NzcxOXAyMTY3MzI
+
+# Testing connection via redis-cli:
+redis-cli --tls -u redis://default:AUFcAAIncDIyZTFhMzk3ODE1MzM0MWMzOTI2YjBiZjkwNzU4NzcxOXAyMTY3MzI@winning-barnacle-16732.upstash.io:6379
+```
+
+### Upstash Redis Connection Methods
+
+Upstash provides two ways to connect to Redis:
+
+#### 1. Redis Protocol (Primary - Used by Celery)
+
+```bash
+# Connection URL format:
+rediss://default:PASSWORD@DATABASE.upstash.io:6379
+
+# For redis-cli testing (note: use redis:// for CLI, but rediss:// in code):
+redis-cli --tls -u redis://default:PASSWORD@DATABASE.upstash.io:6379
+
+# Example commands:
+> ping
+PONG
+> info server
+# ... server information ...
+> set test:key "hello world"
+OK
+> get test:key
+"hello world"
+> keys *
+1) "test:key"
+> del test:key
+(integer) 1
+```
+
+**Why `redis://` for CLI but `rediss://` in code?**
+- `redis-cli --tls` flag handles SSL/TLS connection
+- In application code (Python/Node), use `rediss://` to enable SSL/TLS
+- Both connect to the same server with encryption
+
+#### 2. REST API (Alternative - HTTP-based)
+
+```bash
+# Environment variables:
+UPSTASH_REDIS_REST_URL="https://DATABASE.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="PASSWORD"
+
+# Example REST API calls:
+# PING
+curl -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  "$UPSTASH_REDIS_REST_URL/ping"
+# Response: {"result":"PONG"}
+
+# SET a key
+curl -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  "$UPSTASH_REDIS_REST_URL/set/mykey/myvalue"
+# Response: {"result":"OK"}
+
+# GET a key
+curl -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  "$UPSTASH_REDIS_REST_URL/get/mykey"
+# Response: {"result":"myvalue"}
+
+# LIST all keys
+curl -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  "$UPSTASH_REDIS_REST_URL/keys/*"
+# Response: {"result":["mykey"]}
+```
+
+**When to use REST API:**
+- Debugging from environments without Redis client
+- Browser-based applications
+- Serverless functions with HTTP-only access
+- Quick testing without installing redis-cli
+
+**When to use Redis Protocol:**
+- Production applications (faster, more efficient)
+- Celery/background job processing (required)
+- Full Redis feature support
+- Better performance for high-throughput operations
+
+#### 3. Upstash Dashboard Console
+
+You can also execute Redis commands directly from the Upstash dashboard:
+1. Go to https://console.upstash.com/
+2. Select your database
+3. Click "CLI" tab
+4. Run commands interactively
+
+### Debugging Upstash Connection Issues
+
+```bash
+# 1. Test basic connectivity
+redis-cli --tls -u redis://default:PASSWORD@DATABASE.upstash.io:6379 ping
+
+# 2. Check if Celery can connect
+python3 << 'PYEOF'
+import redis
+import ssl
+
+url = "rediss://default:PASSWORD@DATABASE.upstash.io:6379"
+client = redis.from_url(url, ssl_cert_reqs=ssl.CERT_NONE, decode_responses=True)
+print("Connected:", client.ping())
+print("Server info:", client.info('server')['redis_version'])
+PYEOF
+
+# 3. Test REST API
+curl -H "Authorization: Bearer $UPSTASH_REDIS_REST_TOKEN" \
+  "$UPSTASH_REDIS_REST_URL/ping"
+
+# 4. Check for firewall/network issues
+telnet DATABASE.upstash.io 6379
+
+# 5. Verify SSL certificate
+openssl s_client -connect DATABASE.upstash.io:6379 -servername DATABASE.upstash.io
+```
+
+**Common Connection Errors:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Connection refused` | Wrong host/port | Verify DATABASE.upstash.io:6379 |
+| `Authentication failed` | Wrong password | Check UPSTASH_REDIS_REST_TOKEN |
+| `SSL handshake failed` | Missing --tls flag | Use `redis-cli --tls` |
+| `Certificate verify failed` | Strict SSL validation | Use `ssl_cert_reqs=ssl.CERT_NONE` in code |
+| `Timeout` | Network/firewall | Check network connectivity |
+
