@@ -69,8 +69,9 @@ services:
           property: connectionString
 
   # React Frontend (Static Site)
-  - type: static
+  - type: web
     name: va-calibration-frontend
+    env: static
     region: oregon
     plan: free
     branch: main
@@ -85,10 +86,6 @@ services:
           type: web
           name: va-calibration-api
           property: host
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
 
 # Redis Database
 databases:
