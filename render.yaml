@@ -72,7 +72,6 @@ services:
   - type: web
     name: va-calibration-frontend
     runtime: static
-    region: oregon
     plan: free
     branch: main
     rootDir: mock-to-real
