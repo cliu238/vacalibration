@@ -4,6 +4,7 @@ VA-Calibration API - Job Management Endpoints
 Provides comprehensive job orchestration, batch processing, and result caching
 """
 
+import logging
 from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
@@ -23,12 +24,21 @@ from celery.result import AsyncResult
 
 from .r_script_generator import generate_calibration_r_script
 
+# Initialize logger
+logger = logging.getLogger(__name__)
+
 # Initialize Redis client for caching and job storage
 # Use REDIS_URL if available (for Upstash or other hosted Redis)
 # Fall back to REDIS_HOST/PORT for local development
 redis_url = os.getenv("REDIS_URL")
 if redis_url:
-    redis_client = redis.from_url(redis_url, decode_responses=True)
+    # For Upstash and other SSL Redis, skip SSL cert verification
+    import ssl
+    redis_client = redis.from_url(
+        redis_url,
+        decode_responses=True,
+        ssl_cert_reqs=ssl.CERT_NONE if redis_url.startswith("rediss://") else None
+    )
 else:
     redis_client = redis.Redis(
         host=os.getenv("REDIS_HOST", "localhost"),
