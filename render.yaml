@@ -14,7 +14,7 @@ services:
     plan: free
     branch: main
     rootDir: api
-    buildCommand: "pip install poetry && poetry install --no-dev"
+    buildCommand: "pip install poetry && poetry install --without dev"
     startCommand: "poetry run uvicorn app.main_direct:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
@@ -49,7 +49,7 @@ services:
     plan: free
     branch: main
     rootDir: api
-    buildCommand: "pip install poetry && poetry install --no-dev"
+    buildCommand: "pip install poetry && poetry install --without dev"
     startCommand: "poetry run celery -A app.job_endpoints.celery_app worker --loglevel=info --pool=solo"
     envVars:
       - key: PYTHON_VERSION
