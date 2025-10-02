@@ -168,7 +168,7 @@ class CalibrationJobRequest(BaseModel):
         le=120
     )
     use_cache: bool = Field(
-        default=True,
+        default=False,
         description="Whether to use cached results if available"
     )
 
@@ -427,7 +427,7 @@ def run_calibration_task(self, job_id: str, request_data: Dict[str, Any]):
         update_job_progress(job_id, 1, 5, "Initializing")
 
         # Check for cached result
-        if request_data.get("use_cache", True):
+        if request_data.get("use_cache", False):
             cached_result = get_cached_result(request_data)
             if cached_result:
                 log_job_event(job_id, LogLevel.INFO, "Using cached result", "cache")
@@ -475,7 +475,11 @@ def run_calibration_task(self, job_id: str, request_data: Dict[str, Any]):
 
             # Run R script with real-time log streaming
             timeout_minutes = request_data.get("timeout_minutes", 30)
-            cmd = ["Rscript", r_script_file, input_file, output_file, job_id]
+            cmd = ["Rscript", "--vanilla", r_script_file, input_file, output_file, job_id]
+
+            # Set R to unbuffered output
+            env = os.environ.copy()
+            env['R_DEFAULT_DEVICE'] = 'pdf'  # Prevent X11 issues
 
             # Simple subprocess with line-by-line output
             process = subprocess.Popen(
@@ -483,17 +487,23 @@ def run_calibration_task(self, job_id: str, request_data: Dict[str, Any]):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,  # Merge stderr into stdout
                 text=True,
-                bufsize=1
+                bufsize=1,  # Line buffered
+                env=env,
+                universal_newlines=True
             )
 
             # Read and log output line by line
             output_lines = []
+            log_job_event(job_id, LogLevel.INFO, "Starting to read R script output...", "celery_worker")
+            line_count = 0
             for line in process.stdout:
                 line = line.rstrip()
+                line_count += 1
                 if line:
                     output_lines.append(line)
                     # Send to Redis immediately
                     log_job_event(job_id, LogLevel.INFO, line, "R_console")
+            log_job_event(job_id, LogLevel.INFO, f"Finished reading R output - captured {line_count} lines", "celery_worker")
 
             # Wait for process to complete
             process.wait(timeout=timeout_minutes * 60)
