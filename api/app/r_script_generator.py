@@ -20,8 +20,14 @@ args <- commandArgs(trailingOnly = TRUE)
 input_file <- args[1]
 output_file <- args[2]
 
+# Print to stderr so it's captured immediately
+cat("=== VA Calibration Starting ===\n", file=stderr())
+flush(stderr())
+
 tryCatch({
     # Read input
+    cat("Reading input file...\n", file=stderr())
+    flush(stderr())
     input_data <- fromJSON(input_file)
 
     # Process VA data
@@ -60,15 +66,19 @@ tryCatch({
     }
 
     # Run calibration
+    cat("Running vacalibration with verbose=TRUE...\n", file=stderr())
+    flush(stderr())
     result <- vacalibration(
         va_data = va_data,
         age_group = input_data$age_group,
         country = input_data$country,
         Mmat_type = input_data$mmat_type,
         ensemble = input_data$ensemble,
-        verbose = FALSE,
+        verbose = TRUE,
         plot_it = FALSE
     )
+    cat("Calibration completed successfully!\n", file=stderr())
+    flush(stderr())
 
     # Prepare output
     output <- list(success = TRUE)
